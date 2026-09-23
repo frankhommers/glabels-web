@@ -124,10 +124,14 @@ def create_app() -> FastAPI:
             # index.html would hide it behind a 200.
             if full_path.startswith("api/"):
                 raise HTTPException(status_code=404, detail="unknown endpoint")
-            candidate = web_root / full_path
-            if full_path and candidate.is_file():
+            # Only files inside the web root: the path may hold encoded "..".
+            root = web_root.resolve()
+            candidate = (root / full_path).resolve()
+            if full_path and candidate.is_relative_to(root) and candidate.is_file():
                 return FileResponse(candidate)
-            return FileResponse(web_root / "index.html")
+            # The page names the current build's assets, so the browser must
+            # ask for it again after an update instead of keeping an old one.
+            return FileResponse(root / "index.html", headers={"Cache-Control": "no-cache"})
 
     return app
 

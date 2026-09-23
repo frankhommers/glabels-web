@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { api } from '../api/client'
 import type { DocumentDetail, DocumentObject } from '../api/types'
 import { useT } from '../i18n'
 import { labelSize } from './label'
@@ -61,7 +62,7 @@ function LabelOutline({ document: doc }: { document: DocumentDetail }) {
   return <rect x={0} y={0} width={w} height={h} rx={doc.label_round_pt || 0} ry={doc.label_round_pt || 0} {...style} />
 }
 
-function ObjectShape({ object }: { object: DocumentObject }) {
+function ObjectShape({ object, docId }: { object: DocumentObject; docId: string }) {
   const t = useT()
   switch (object.type) {
     case 'box':
@@ -149,6 +150,18 @@ function ObjectShape({ object }: { object: DocumentObject }) {
         </g>
       )
     case 'image':
+      // An embedded image is drawn stretched over its frame, as gLabels does.
+      // One taken from a merge field differs per record: a placeholder.
+      if (object.embedded && object.src && !object.src_field) {
+        return (
+          <image
+            href={api.embeddedFileUrl(docId, object.src)}
+            width={object.w_pt}
+            height={object.h_pt}
+            preserveAspectRatio="none"
+          />
+        )
+      }
       return (
         <g>
           <rect width={object.w_pt} height={object.h_pt} fill="#f0f4f8" stroke="#9a9a9a" strokeDasharray="3 2" strokeWidth={0.5} />
@@ -370,7 +383,7 @@ export function LabelCanvas(props: CanvasProps) {
           onPointerDown={(event) => startMove(event, object)}
           style={{ cursor: object.type === 'unsupported' ? 'not-allowed' : 'move' }}
         >
-          <ObjectShape object={object} />
+          <ObjectShape object={object} docId={doc.id} />
         </g>
       ))}
 

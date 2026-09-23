@@ -37,7 +37,7 @@ file format `Glabels-document version="4.0"`.
 | `Object-ellipse` | yes | yes | yes | same |
 | `Object-line` | yes | yes | yes | `dx`/`dy`, line width and colour |
 | `Object-barcode` | yes | yes | yes | Backend and style are never changed silently |
-| `Object-image` | yes | no | yes | Source and embedded data are kept; new images not yet |
+| `Object-image` | yes | no | yes | Source and embedded data are kept; embedded images are drawn in the editor, one from a merge field as a placeholder; new images not yet |
 | unknown element | yes | no | unchanged | Shown as a locked object with a notice |
 
 Common to all objects: position, size, `lock_aspect_ratio`, the affine matrix

@@ -146,3 +146,82 @@ def test_public_url_in_health(tmp_path, templates_dir, monkeypatch, value, expec
             assert client.get("/api/health").json()["public_url"] == expected
     finally:
         settings_module.reset_settings_cache()
+
+
+def _with_embedded(fixtures_dir, files: str) -> bytes:
+    raw = (fixtures_dir / "simple-shapes.glabels").read_text(encoding="utf-8")
+    return raw.replace("<Data/>", f"<Data>{files}</Data>").encode("utf-8")
+
+
+def test_embedded_images_are_served_for_the_editor(client, fixtures_dir):
+    import base64
+
+    png = b"\x89PNG\r\n\x1a\n" + b"not really a picture"
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+    raw = _with_embedded(
+        fixtures_dir,
+        f'<File name="%image_1%" mimetype="image/png" encoding="base64">'
+        f"{base64.b64encode(png).decode()}</File>"
+        f'<File name="C:/drawings/ruler.svg" mimetype="image/svg+xml" encoding="cdata">'
+        f"<![CDATA[{svg}]]></File>"
+        f'<File name="notes.txt" mimetype="text/html" encoding="base64">'
+        f"{base64.b64encode(b'<b>hi</b>').decode()}</File>",
+    )
+    doc = client.post(
+        "/api/documents/import", files={"file": ("pictures.glabels", raw, "application/x-glabels")}
+    ).json()
+    url = f"/api/documents/{doc['id']}/embedded"
+
+    image = client.get(url, params={"name": "%image_1%"})
+    assert image.status_code == 200
+    assert image.content == png
+    assert image.headers["content-type"] == "image/png"
+    assert client.get(url, params={"name": "%image_1%"}, headers={"If-None-Match": image.headers["etag"]}).status_code == 304
+
+    # An SVG may hold a script: it must never be allowed to run.
+    drawing = client.get(url, params={"name": "C:/drawings/ruler.svg"})
+    assert drawing.status_code == 200
+    assert drawing.headers["content-type"].startswith("image/svg+xml")
+    assert "sandbox" in drawing.headers["content-security-policy"]
+    assert "default-src 'none'" in drawing.headers["content-security-policy"]
+
+    # Only images; other embedded content is not handed out.
+    assert client.get(url, params={"name": "notes.txt"}).status_code == 415
+    assert client.get(url, params={"name": "missing"}).status_code == 404
+
+
+@pytest.fixture()
+def web_client(tmp_path, templates_dir, monkeypatch):
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "icons").mkdir()
+    (web / "index.html").write_text("<html>app</html>")
+    (web / "manifest.json").write_text("{}")
+    (tmp_path / "secret.txt").write_text("not for you")
+    monkeypatch.setenv("GLW_SYSTEM_TEMPLATES_DIR", str(templates_dir))
+    monkeypatch.setenv("GLW_USER_TEMPLATES_DIR", str(tmp_path / "user-templates"))
+    monkeypatch.setenv("GLW_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("GLW_WEB_ROOT", str(web))
+    settings_module.reset_settings_cache()
+    with TestClient(create_app()) as test_client:
+        yield test_client
+    settings_module.reset_settings_cache()
+
+
+def test_pages_are_served_and_never_cached(web_client):
+    page = web_client.get("/m/some-label")
+    assert page.status_code == 200
+    assert page.text == "<html>app</html>"
+    assert page.headers["cache-control"] == "no-cache"
+    assert web_client.get("/manifest.json").text == "{}"
+    assert web_client.get("/api/does-not-exist").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/..%2Fsecret.txt", "/%2E%2E/secret.txt", "/..%2F..%2F..%2F..%2Fetc%2Fpasswd", "/assets%2F..%2F..%2Fsecret.txt"],
+)
+def test_pages_never_leave_the_web_root(web_client, path):
+    response = web_client.get(path)
+    assert "not for you" not in response.text
+    assert "root:" not in response.text

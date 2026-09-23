@@ -150,6 +150,10 @@ export const api = {
   previewImageUrl: (id: string, settings: PrintSettings, page: number, dpi: number, revision: number) =>
     `/api/documents/${id}/preview.png?${printQuery(settings)}&page=${page}&dpi=${dpi}&rev=${revision}`,
 
+  /** An image embedded in the document, for drawing it in the editor. */
+  embeddedFileUrl: (id: string, name: string) =>
+    `/api/documents/${id}/embedded?name=${encodeURIComponent(name)}`,
+
   printPdfUrl: (id: string, settings: PrintSettings) =>
     `/api/documents/${id}/print.pdf?${printQuery(settings)}`,
 }

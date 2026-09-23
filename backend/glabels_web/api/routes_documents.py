@@ -11,7 +11,7 @@ from anyio import to_thread
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -495,6 +495,41 @@ async def preview_info(
     return PreviewInfo(
         revision=info.revision, pages=_pdf_pages(pdf), page_width_pt=width, page_height_pt=height
     )
+
+
+# Embedded files the editor may show. SVG can hold scripts, so every answer
+# forbids running anything, also when someone opens the address directly.
+EMBEDDED_IMAGE_TYPES = {
+    "image/png", "image/jpeg", "image/gif", "image/bmp", "image/webp", "image/svg+xml",
+}
+
+
+@router.get("/{doc_id}/embedded")
+def embedded_file(
+    doc_id: str,
+    request: Request,
+    name: str = Query(..., min_length=1, max_length=1024),
+    app: AppState = Depends(state),
+) -> Response:
+    """An image embedded in the document, so the editor can draw it."""
+    _, doc = _load(app, doc_id)
+    found = doc.get_embedded_file(name)
+    if found is None:
+        raise HTTPException(status_code=404, detail="no embedded file with that name")
+    mimetype, payload = found
+    mimetype = mimetype.split(";")[0].strip().lower()
+    if mimetype not in EMBEDDED_IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail="this embedded file is not an image")
+    etag = f'"{_sha(payload)[:32]}"'
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "private, no-cache",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(content=payload, media_type=mimetype, headers=headers)
 
 
 @router.get("/{doc_id}/preview.png")
