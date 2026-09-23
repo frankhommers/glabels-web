@@ -1,0 +1,10 @@
+<!--
+  Folder icon for the Files page in the page bar.
+
+  Source: "folder full" by Alfonso Lopez-Sanz, via The Noun Project.
+  The attribution that was part of the original file has been taken out of
+  the drawing and is in ../../../origin.md and in the application's About
+  dialog. Otherwise only the fill colour was matched to the rest of the page
+  bar (#333333).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 64 64" enable-background="new 0 0 64 64" xml:space="preserve"><g fill="#333333"><g><polygon points="6.397,57.983 49.318,57.983 57.746,28.483 14.826,28.483   "/><rect x="29.788" y="19.637" transform="matrix(0.9239 0.3827 -0.3827 0.9239 11.0028 -14.0381)" width="21.999" height="2"/><path d="M59.454,18.688L28.967,6.06c-0.508-0.21-1.096,0.031-1.307,0.541l-2.006,4.843c-0.461-0.288-1-0.46-1.582-0.46h-17    c-1.654,0-3,1.346-3,3v1.955c-0.001,0.015-0.001,0.03-0.001,0.045l0.001,43c0,0.035,0.017,0.064,0.02,0.098    c-0.012-0.124-0.018-0.249,0.018-0.372l9.001-31.5c0.123-0.43,0.516-0.726,0.962-0.726h5.352h2.165l5.424-13.093c0,0,0,0,0-0.001    l2.112-5.1l28.64,11.862l-2.622,6.331h2.165l2.688-6.489C60.206,19.483,59.964,18.898,59.454,18.688z"/><polygon points="26.459,26.483 31.384,26.483 27.181,24.742   "/><polygon points="28.328,21.971 39.223,26.483 44.449,26.483 29.094,20.123   "/></g></g></svg>

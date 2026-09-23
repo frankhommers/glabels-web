@@ -1,0 +1,33 @@
+[project]
+name = "glabels-web-backend"
+version = "0.1.0"
+license = "GPL-3.0-or-later"
+description = "Backend for gLabels Web: documents, templates and rendering"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "lxml>=5.3",
+    "python-multipart>=0.0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["glabels_web"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

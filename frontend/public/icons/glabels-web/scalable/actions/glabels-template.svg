@@ -1,0 +1,11 @@
+<!-- Product definition: a sheet with labels on it. Our own addition in the
+     style of the gLabels theme; see ../../../origin.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 16 16" width="16" height="16">
+  <rect style="fill:#fafafa;stroke:#333333;stroke-width:1" x="2.5" y="1.5" width="11" height="13" />
+  <rect style="fill:#333333;stroke:none" x="4" y="3" width="3.5" height="2.5" />
+  <rect style="fill:#333333;stroke:none" x="8.5" y="3" width="3.5" height="2.5" />
+  <rect style="fill:#333333;stroke:none" x="4" y="6.75" width="3.5" height="2.5" />
+  <rect style="fill:#333333;stroke:none" x="8.5" y="6.75" width="3.5" height="2.5" />
+  <rect style="fill:#333333;stroke:none" x="4" y="10.5" width="3.5" height="2.5" />
+  <rect style="fill:#333333;stroke:none" x="8.5" y="10.5" width="3.5" height="2.5" />
+</svg>

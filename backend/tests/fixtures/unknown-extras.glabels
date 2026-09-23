@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<Glabels-document version="4.0">
+  <Template brand="Avery" description="Name badge labels" part="5095" size="US-Letter">
+    <Label-rectangle y_waste="4.5pt" height="168pt" id="0" round="13.5pt" width="243pt" x_waste="4.5pt">
+      <Markup-margin size="4.5pt"/>
+      <Layout dy="180pt" y0="42pt" nx="2" x0="49.5pt" ny="4" dx="270pt"/>
+    </Label-rectangle>
+  </Template>
+  <Objects id="0" rotate="false">
+    <Object-text font_underline="false" shadow="false" align="left" a5="0" a0="1" shadow_opacity="0.5" w="124pt" h="25pt" shadow_color="0xff" lock_aspect_ratio="false" a2="0" shadow_x="1.3pt" shadow_y="1.3pt" font_size="10" wrap="word" font_weight="normal" a1="0" a3="1" color="0xff" valign="top" x="18pt" a4="0" font_family="Liberation Sans" line_spacing="1" font_italic="false" auto_shrink="false" y="10pt" future_attribute="keep-me">
+      <p>Text with an unknown attribute</p>
+    </Object-text>
+    <Object-future x="10pt" y="10pt" w="20pt" h="20pt" something="else">
+      <Content>do not touch</Content>
+    </Object-future>
+  </Objects>
+  <Future-section value="stays"/>
+  <Data/>
+</Glabels-document>

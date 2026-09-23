@@ -1,0 +1,23 @@
+# Send a document to an IPP printer.
+#
+# Variables: $uri (destination), $filename (-f), $job-name.
+{
+    NAME "Send document to printer"
+    OPERATION Print-Job
+    GROUP operation-attributes-tag
+    ATTR charset attributes-charset utf-8
+    ATTR naturalLanguage attributes-natural-language en
+    ATTR uri printer-uri $uri
+    ATTR name requesting-user-name $user
+    ATTR name job-name "$job-name"
+    # Our renderer always produces PDF; saying so explicitly is more
+    # reliable than letting ipptool guess it from the file name.
+    ATTR mimeMediaType document-format application/pdf
+
+    FILE $filename
+
+    STATUS successful-ok
+    STATUS successful-ok-ignored-or-substituted-attributes
+    EXPECT job-id OF-TYPE integer WITH-VALUE >0
+    EXPECT job-state OF-TYPE enum
+}

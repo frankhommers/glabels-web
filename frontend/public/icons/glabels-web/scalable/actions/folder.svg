@@ -1,0 +1,33 @@
+<!--
+  Folder icon for the whole application: page bar, places bar, file list,
+  Open and Browse. Redrawn after the design the client supplied: an open
+  folder with a dark back panel and a lighter front panel, both with a
+  vertical gradient and rounded corners.
+
+  The corners are rounded with a stroke in the same colour as the fill
+  (stroke-linejoin="round"); that keeps the paths readable and scales cleanly.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="map-achter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e7a301" />
+      <stop offset="1" stop-color="#bd7e00" />
+    </linearGradient>
+    <linearGradient id="map-voor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd455" />
+      <stop offset="1" stop-color="#fcc027" />
+    </linearGradient>
+  </defs>
+
+  <!-- Back panel, with the tab at the top left -->
+  <path
+     fill="url(#map-achter)" stroke="url(#map-achter)"
+     stroke-width="2.2" stroke-linejoin="round"
+     d="M 5.2,9.3 H 19.4 L 22.6,12.7 H 42.8 V 30 H 5.2 Z" />
+
+  <!-- Front panel -->
+  <path
+     fill="url(#map-voor)" stroke="url(#map-voor)"
+     stroke-width="2.4" stroke-linejoin="round"
+     d="M 4.0,23.2 H 25.6 L 28.0,20.6 H 44.0 L 42.6,38.4 H 5.4 Z" />
+</svg>

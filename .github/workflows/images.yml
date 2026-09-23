@@ -1,0 +1,165 @@
+# Builds the container images and publishes them on the GitHub Container
+# Registry:
+#
+#   ghcr.io/<owner>/glabels-web            the application
+#   ghcr.io/<owner>/glabels-web-renderer   the Qt batch renderer it builds on
+#
+# Each architecture builds on its own native runner (building Qt under
+# emulation would take hours). The backend tests then run against the freshly
+# built renderer, and only if they pass do the public tags move: `latest` for
+# main, `1.2.3` and `1.2` for a `v1.2.3` tag, and `sha-<commit>` always.
+
+name: images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image names
+        id: names
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          suffix="sha-${GITHUB_SHA::12}-${{ matrix.arch }}"
+          echo "renderer=${REGISTRY}/${owner}/glabels-web-renderer:${suffix}" >> "$GITHUB_OUTPUT"
+          echo "app=${REGISTRY}/${owner}/glabels-web:${suffix}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Renderer
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/renderer.Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: BUILD_JOBS=4
+          push: true
+          tags: ${{ steps.names.outputs.renderer }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
+            org.opencontainers.image.description=gLabels Qt batch renderer for gLabels Web
+          cache-from: type=gha,scope=renderer-${{ matrix.arch }}
+          cache-to: type=gha,scope=renderer-${{ matrix.arch }},mode=max
+
+      - name: Application
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/app.Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: RENDERER_IMAGE=${{ steps.names.outputs.renderer }}
+          push: true
+          tags: ${{ steps.names.outputs.app }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
+            org.opencontainers.image.description=gLabels Web: design and print gLabels labels in the browser
+          cache-from: type=gha,scope=app-${{ matrix.arch }}
+          cache-to: type=gha,scope=app-${{ matrix.arch }},mode=max
+
+  test:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The tests read the template database from the renderer image and run
+      # the real renderer for the end-to-end tests, under this local name.
+      - name: Renderer from this build
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="${REGISTRY}/${owner}/glabels-web-renderer:sha-${GITHUB_SHA::12}-amd64"
+          docker pull "$image"
+          docker tag "$image" glabels-web/renderer:dev
+          ./scripts/sync-vendor.sh glabels-web/renderer:dev
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Backend tests
+        working-directory: backend
+        run: |
+          uv venv .venv --python 3.12
+          uv pip install --python .venv/bin/python -e ".[dev]"
+          GLW_SYSTEM_TEMPLATES_DIR="$PWD/../vendor/glabels-qt/templates" .venv/bin/python -m pytest -q
+
+  publish:
+    needs: [build, test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: IMAGE
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+
+      - name: Multi-architecture manifests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          for name in glabels-web glabels-web-renderer; do
+            image="${REGISTRY}/${owner}/${name}"
+            args=()
+            while read -r tag; do
+              [ -n "$tag" ] && args+=(-t "${image}:${tag#IMAGE:}")
+            done <<< "$TAGS"
+            docker buildx imagetools create "${args[@]}" \
+              "${image}:sha-${GITHUB_SHA::12}-amd64" \
+              "${image}:sha-${GITHUB_SHA::12}-arm64"
+            docker buildx imagetools inspect "${image}:sha-${GITHUB_SHA}"
+          done

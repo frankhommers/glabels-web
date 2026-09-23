@@ -1,0 +1,30 @@
+# Ask what the printer supports.
+#
+# Variables: $uri (destination).
+{
+    NAME "Get printer attributes"
+    OPERATION Get-Printer-Attributes
+    GROUP operation-attributes-tag
+    ATTR charset attributes-charset utf-8
+    ATTR naturalLanguage attributes-natural-language en
+    ATTR uri printer-uri $uri
+    ATTR name requesting-user-name $user
+    ATTR keyword requested-attributes
+         printer-make-and-model,
+         printer-name,
+         printer-state,
+         printer-state-reasons,
+         printer-is-accepting-jobs,
+         document-format-supported,
+         document-format-default,
+         media-supported,
+         media-default,
+         media-ready,
+         printer-resolution-supported,
+         printer-resolution-default,
+         ipp-versions-supported,
+         sides-supported,
+         print-color-mode-supported
+
+    STATUS successful-ok
+}

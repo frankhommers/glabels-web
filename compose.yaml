@@ -1,0 +1,73 @@
+# Self-hosted deployment on a single machine.
+#
+# Using the published images:
+#
+#   docker compose pull app
+#   docker compose up -d app
+#
+# Building them yourself: first the renderer image (Qt batch renderer +
+# templates), then the application image that builds on top of it.
+#
+#   docker compose build renderer
+#   docker compose build app
+#   docker compose up -d app
+
+services:
+  renderer:
+    image: ghcr.io/frankhommers/glabels-web-renderer:latest
+    build:
+      context: .
+      dockerfile: docker/renderer.Dockerfile
+      args:
+        # Only raise this on machines with enough memory; otherwise the Qt
+        # build runs out of it.
+        BUILD_JOBS: "2"
+    # This image only provides the renderer; it does not run as a service.
+    profiles: ["build"]
+
+  app:
+    image: ghcr.io/frankhommers/glabels-web:latest
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      args:
+        RENDERER_IMAGE: ghcr.io/frankhommers/glabels-web-renderer:latest
+    depends_on:
+      renderer:
+        condition: service_started
+        required: false
+    ports:
+      # Only the application port is reachable from outside.
+      - "127.0.0.1:8080:8000"
+    volumes:
+      # Documents, database and revisions.
+      - glabels-data:/var/lib/glabels-web
+      # Shared folder: projects (.glabels), merge sources, user fonts
+      # (subfolder "fonts") and product definitions (subfolder "templates").
+      # This folder is reachable from the host.
+      #
+      # On Linux the folder must be writable for the container user:
+      #   mkdir -p data/shared/fonts && sudo chown -R 10001:10001 data/shared
+      - ./data/shared:/var/lib/glabels-web/files
+    # No login of its own; put a reverse proxy in front of it for HTTPS and
+    # authentication. See README, "Access".
+    # environment:
+    #   # The address phones use to reach it; goes into the "Open on phone" QR code.
+    #   GLW_PUBLIC_URL: https://labels.home.lan
+    restart: unless-stopped
+
+  # Printer simulator for development and testing without hardware.
+  # Start it with: docker compose --profile test up -d testprinter
+  # Then add it in the interface as ipp://testprinter:8632/ipp/print
+  testprinter:
+    image: glabels-web/testprinter:dev
+    build:
+      context: .
+      dockerfile: docker/testprinter.Dockerfile
+    # ippeveprinter compares the Host header with its own host name, so that
+    # must equal the name the application uses to reach it.
+    hostname: testprinter
+    profiles: ["test"]
+
+volumes:
+  glabels-data:

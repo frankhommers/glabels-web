@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# Runtime and build artefacts
+artifacts/
+vendor/glabels-qt/
+.dev-data/
+*.log
+
+# Content of the shared folder; the folder itself stays
+data/shared/*
+!data/shared/README.txt
+!data/shared/fonts/
+data/shared/fonts/*
+
+# Screenshots from browser tests
+.playwright-mcp/

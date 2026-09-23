@@ -1,0 +1,16 @@
+# Ask for the state of a job sent earlier.
+#
+# Variables: $uri (destination), $job-id.
+{
+    NAME "Get job state"
+    OPERATION Get-Job-Attributes
+    GROUP operation-attributes-tag
+    ATTR charset attributes-charset utf-8
+    ATTR naturalLanguage attributes-natural-language en
+    ATTR uri printer-uri $uri
+    ATTR integer job-id $job-id
+    ATTR name requesting-user-name $user
+
+    STATUS successful-ok
+    EXPECT job-state OF-TYPE enum
+}

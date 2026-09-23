@@ -1,0 +1,678 @@
+/* The look of the desktop app: a Qt-like window with a menu bar, toolbars,
+   a vertical page bar and a status bar. The colours follow the light Fusion
+   palette gLabels Qt uses on Linux. */
+
+:root {
+  --window: #efefef;
+  --window-alt: #f7f7f7;
+  --base: #ffffff;
+  --border: #b4b4b4;
+  --border-light: #d4d4d4;
+  --text: #232629;
+  --text-muted: #6a6f75;
+  --highlight: #1e6fa8;
+  --highlight-soft: #d9e9f5;
+  --button: linear-gradient(#fdfdfd, #f0f0f0);
+  --button-hover: linear-gradient(#ffffff, #f6f6f6);
+  --button-down: #e2e2e2;
+  --warning-bg: #fdecec;
+  --warning-border: #d08a8a;
+  --notice-bg: #fdf6e0;
+  --notice-border: #ddc06a;
+
+  color-scheme: light;
+  font-family: 'Segoe UI', 'Noto Sans', Cantarell, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--window); overflow: hidden; }
+
+.icon { display: block; }
+.spacer { flex: 1; }
+.muted, .placeholder { color: var(--text-muted); }
+.placeholder { padding: 0.6rem 0; }
+
+/* --------------------------------------------------------------- main window */
+.mainwindow { display: flex; flex-direction: column; height: 100%; }
+.mainwindow-body { display: flex; flex: 1; min-height: 0; }
+.pages { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--window); overflow: auto; }
+
+/* ------------------------------------------------------------------ menu bar */
+.menubar { display: flex; background: var(--window); border-bottom: 1px solid var(--border-light); padding: 0 2px; }
+.menubar-item { position: relative; }
+.menubar-button {
+  font: inherit;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 4px 10px;
+  cursor: default;
+  color: var(--text);
+}
+.menubar-button:hover,
+.menubar-button.open {
+  background: var(--highlight);
+  color: #ffffff;
+}
+.menu-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 230px;
+  background: var(--base);
+  border: 1px solid var(--border);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 22%);
+  padding: 3px 0;
+}
+.menu-popup button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  padding: 4px 10px;
+  cursor: default;
+  color: var(--text);
+}
+.menu-popup button:hover:not(:disabled) { background: var(--highlight); color: #fff; }
+.menu-popup button:disabled { color: #a6a6a6; }
+.menu-popup hr { border: none; border-top: 1px solid var(--border-light); margin: 3px 0; }
+.menu-check { width: 12px; }
+.menu-label { flex: 1; }
+.menu-shortcut { color: var(--text-muted); font-size: 0.85em; }
+.menu-popup button:hover:not(:disabled) .menu-shortcut { color: #e4eef7; }
+
+/* ------------------------------------------------------------------ toolbars */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: var(--window);
+  border-bottom: 1px solid var(--border-light);
+}
+.quick-toolbar .window-title { color: var(--text-muted); padding-left: 4px; }
+.quick-toolbar .window-title.editable {
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  padding: 2px 4px;
+  font: inherit;
+  cursor: text;
+}
+.quick-toolbar .window-title.editable:hover { border-color: var(--border-light); color: var(--text); }
+.quick-toolbar .window-title-input { width: 280px; margin-left: 2px; }
+.toolbar-separator { width: 1px; align-self: stretch; margin: 2px 5px; background: var(--border-light); }
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 28px;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  cursor: default;
+  font: inherit;
+  color: var(--text);
+}
+.tool:hover:not(:disabled) { background: var(--button-hover); border-color: var(--border-light); }
+.tool.active { background: var(--highlight-soft); border-color: #9dc2de; }
+.tool:disabled { opacity: 0.4; }
+.tool.text-tool { font-size: 12px; }
+/* Icons are never scaled: blowing a 16px drawing up to 20 makes its lines
+   thinner than its neighbours'. One size per bar, and draw that size. */
+.zoom-info { min-width: 46px; text-align: center; color: var(--text-muted); }
+
+/* ------------------------------------------------------------------ page bar */
+.contents {
+  display: flex;
+  flex-direction: column;
+  background: var(--window-alt);
+  border-right: 1px solid var(--border-light);
+  padding: 4px;
+  gap: 2px;
+  width: 96px;
+  flex: none;
+}
+.contents-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 2px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  cursor: default;
+}
+.contents-button:hover:not(:disabled) { background: var(--button-hover); border-color: var(--border-light); }
+.contents-button.active { background: var(--highlight-soft); border-color: #9dc2de; }
+.contents-button:disabled { opacity: 0.38; }
+
+/* ---------------------------------------------------------------- status bar */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 3px 8px;
+  border-top: 1px solid var(--border-light);
+  background: var(--window);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ controls */
+/* The base button style sits in :where(), so with zero specificity.
+   Otherwise "button:hover" beats component rules such as
+   ".menubar-button.open" and you get white text on a light background. */
+:where(button, .button) {
+  font: inherit;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--button);
+  color: var(--text);
+  cursor: default;
+  text-decoration: none;
+  display: inline-block;
+}
+:where(button:not(:disabled), .button):hover { background: var(--button-hover); }
+:where(button:not(:disabled)):active { background: var(--button-down); }
+
+/* Disabled still outweighs a component colour. */
+button:disabled { color: #a6a6a6; }
+button.default { border-color: var(--highlight); box-shadow: inset 0 0 0 1px #bcdcf1; }
+button.linklike {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #2a6099;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+input[type='text'], input[type='number'], input:not([type]), select, textarea {
+  font: inherit;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--base);
+  color: var(--text);
+}
+input:focus, select:focus, textarea:focus { outline: 1px solid var(--highlight); outline-offset: -1px; }
+textarea { width: 100%; resize: vertical; font-family: inherit; }
+
+.check { display: inline-flex; align-items: center; gap: 5px; }
+.check.wide { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; line-height: 1.35; }
+
+fieldset {
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  margin: 0 0 10px;
+  padding: 8px 10px 10px;
+  background: var(--window);
+  /* Browsers give a fieldset min-width: min-content. A long option in a
+     select then pushes the frame out of its panel. */
+  min-width: 0;
+}
+legend { padding: 0 4px; color: var(--text-muted); }
+
+.form-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.form-row > label:first-child { width: 96px; flex: none; text-align: right; color: var(--text); }
+.form-row.indented { padding-left: 22px; }
+.form-row select, .form-row input { flex: 1; min-width: 0; }
+.form-static { color: var(--text); }
+
+.spin { display: inline-flex; align-items: center; gap: 4px; flex: 1; }
+.spin input { width: 100%; min-width: 0; }
+.spin-suffix { color: var(--text-muted); min-width: 22px; }
+
+.toggle-group { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.toggle-gap { width: 10px; }
+.icon-toggle {
+  padding: 1px;
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  background: var(--button);
+  line-height: 0;
+}
+.icon-toggle.active { background: var(--highlight-soft); border-color: #9dc2de; }
+
+.color-button { display: inline-flex; align-items: center; gap: 8px; }
+.color-swatch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background-image: linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%),
+    linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}
+.color-swatch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; }
+.color-none { position: absolute; inset: 0; display: grid; place-items: center; color: #b04040; }
+
+.inline-notice, .inline-warning {
+  margin: 8px 0 0;
+  padding: 5px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.inline-notice { background: var(--notice-bg); border: 1px solid var(--notice-border); }
+.inline-warning { background: var(--warning-bg); border: 1px solid var(--warning-border); }
+.page-error { margin: 8px; padding: 6px 10px; background: var(--warning-bg); border: 1px solid var(--warning-border); }
+
+/* -------------------------------------------------------------- welcome page */
+.welcome { flex: 1; display: flex; justify-content: center; padding: 28px 20px; overflow: auto; }
+.welcome-inner { width: min(760px, 100%); }
+.welcome-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.welcome-brand h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
+.welcome-brand p { margin: 2px 0 0; }
+.welcome-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.welcome-actions button {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  grid-template-rows: auto auto;
+  gap: 2px 12px;
+  align-items: center;
+  text-align: left;
+  padding: 14px;
+  background: var(--base);
+}
+.welcome-actions button .icon { grid-row: span 2; }
+.welcome-actions strong { font-weight: 600; }
+.welcome-actions span { color: var(--text-muted); font-size: 12px; }
+.welcome-recent { margin-top: 22px; }
+.welcome-recent h2 { display: flex; align-items: center; gap: 6px; font-size: 1rem; font-weight: 600; margin: 0 0 6px; }
+.welcome-recent ul { list-style: none; margin: 0; padding: 0; background: var(--base); border: 1px solid var(--border-light); border-radius: 3px; }
+.welcome-recent li { display: flex; gap: 10px; align-items: baseline; padding: 5px 10px; }
+.welcome-recent li + li { border-top: 1px solid var(--border-light); }
+.welcome-footer { margin-top: 20px; font-size: 12px; }
+
+/* -------------------------------------------------------------------- editor */
+.editor-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.editor-split { display: flex; flex: 1; min-height: 0; }
+.canvas-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: #9a9a9a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 26px;
+}
+.label-canvas { background: #fff; box-shadow: 0 1px 5px rgb(0 0 0 / 35%); }
+.limitation-bar { list-style: none; margin: 0; padding: 6px 8px; display: grid; gap: 5px; background: var(--window); }
+.limitation-bar li { padding: 5px 8px; border-radius: 3px; font-size: 12px; }
+.limitation-bar li.warning { background: var(--warning-bg); border: 1px solid var(--warning-border); }
+.limitation-bar li.notice { background: var(--notice-bg); border: 1px solid var(--notice-border); }
+
+.object-editor {
+  width: 344px;
+  flex: none;
+  background: var(--window);
+  border-left: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.object-editor-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border-light);
+  font-weight: 600;
+}
+/* Without a selection the panel shows only this line; give it the same
+   margin as the rest of the panel instead of letting it touch the edge. */
+.object-editor > .placeholder { padding: 10px 9px; margin: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 1px; padding: 6px 6px 0; }
+.tab {
+  padding: 4px 9px;
+  border: 1px solid var(--border-light);
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  background: var(--window-alt);
+  font-size: 12px;
+}
+.tab.active { background: var(--base); border-color: var(--border); }
+.tab-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px; border-top: 1px solid var(--border); background: var(--window); }
+.tab-body fieldset { background: var(--base); }
+
+/* ----------------------------------------------------------------- page form */
+.page-form { padding: 14px 16px; max-width: 640px; }
+.sheet-fieldset { background: var(--base); }
+.sheet-preview { width: 100%; max-height: 260px; }
+
+/* ---------------------------------------------------------------- print page */
+.print-page { display: flex; flex: 1; min-height: 0; }
+/* One gap between all blocks in the panel. Separate margins (frames,
+   notices, buttons) do not add up the same everywhere; this way it is equal. */
+.print-settings {
+  width: 380px;
+  flex: none;
+  padding: 12px;
+  overflow: auto;
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.print-settings > * { margin: 0; flex: none; }
+/* Per frame a label column as wide as its longest label, like the form
+   layout of PrintView; no fixed column with empty space in front. */
+.print-settings fieldset {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 6px;
+  align-items: center;
+}
+.print-settings fieldset > *,
+.print-settings fieldset > .check.wide { grid-column: 1 / -1; margin: 0; }
+.print-settings fieldset > .form-row { display: contents; }
+.print-settings .form-row > label:first-child { width: auto; }
+.print-settings .form-row.indented > label:first-child { padding-left: 22px; }
+.print-settings .form-row > .button-row { justify-self: start; }
+.print-settings .printer-status { grid-column: 2; padding-left: 0; overflow-wrap: anywhere; }
+.print-actions { display: flex; gap: 8px; }
+.print-preview { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #9a9a9a; }
+.preview-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.preview-sheet {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 40%);
+}
+.preview-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 5px;
+  background: var(--window);
+  border-top: 1px solid var(--border-light);
+}
+
+/* ------------------------------------------------------------------- dialogs */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 28%);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+.modal {
+  width: min(880px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--window);
+  border: 1px solid #8a8a8a;
+  border-radius: 4px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 35%);
+}
+.modal-title {
+  padding: 7px 12px;
+  font-weight: 600;
+  background: var(--window-alt);
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 4px 4px 0 0;
+}
+.modal-body { padding: 12px; overflow: auto; flex: 1; min-height: 0; }
+.modal-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border-light);
+}
+.modal-buttons .spacer { flex: 1; }
+
+.product-dialog { display: flex; flex-direction: column; gap: 10px; }
+.product-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.product-filters label { display: inline-flex; align-items: center; gap: 5px; }
+.product-filters input { width: 230px; }
+.product-filters .count { color: var(--text-muted); }
+.product-body { display: grid; grid-template-columns: 1fr 300px; gap: 10px; min-height: 0; }
+.product-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 48vh;
+  overflow: auto;
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.product-list li + li { border-top: 1px solid var(--border-light); }
+.product {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 5px 9px;
+}
+.product.active { background: var(--highlight); color: #fff; }
+.product.active .product-meta { color: #e6f0f8; }
+.product-name { display: block; font-weight: 600; }
+.product-meta { display: block; color: var(--text-muted); font-size: 12px; }
+.product-detail { background: var(--base); border: 1px solid var(--border); border-radius: 3px; padding: 10px; overflow: auto; }
+.product-detail h3 { margin: 0 0 2px; font-size: 1rem; }
+
+.project-table { width: 100%; border-collapse: collapse; background: var(--base); }
+.project-table th, .project-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border-light); }
+.project-table th { background: var(--window-alt); font-weight: 600; }
+.project-table tbody tr { cursor: default; }
+.project-table tbody tr.selected { background: var(--highlight); color: #fff; }
+.project-table tbody tr.selected .linklike { color: #fff; }
+
+/* --------------------------------------------------------------- file dialog */
+.file-dialog { width: min(920px, 94vw); }
+/* The browser brings its own places bar and columns; the dialog must not
+   lay a second grid over them. */
+.file-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.file-body .file-browser { min-height: 46vh; }
+
+.places {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px;
+  align-self: start;
+}
+.place {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  padding: 4px 7px;
+  text-align: left;
+}
+.place:hover:not(.active) { background: var(--button-hover); }
+.place.active { background: var(--highlight-soft); border-color: #9dc2de; }
+
+.file-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* The list itself is the drop area for files dragged in from the desktop.
+   The hint uses the selection colour and the normal text style. */
+.file-list { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.files-page .file-list { flex: 1; }
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: var(--text);
+  background: rgba(217, 233, 245, 0.92); /* --highlight-soft */
+  border: 1px dashed var(--highlight);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.path-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 2px 4px;
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.path-bar .tool { min-width: 26px; height: 22px; }
+.crumb {
+  border: none;
+  background: none;
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: var(--text);
+}
+.crumb:hover { background: var(--button-hover); }
+.crumb-sep { color: var(--text-muted); }
+
+.file-table { display: block; height: 46vh; overflow: auto; }
+.file-table thead, .file-table tbody { display: table; width: 100%; table-layout: fixed; }
+.file-table thead { position: sticky; top: 0; z-index: 1; }
+.file-name { display: flex; align-items: center; gap: 6px; }
+
+.file-table tr.dimmed td { color: var(--text-muted); }
+.file-table tr.selected.dimmed td { color: #dce7f2; }
+.file-name-row > label:first-child { width: 110px; }
+
+/* ---------------------------------------------------------------- merge page */
+.merge-page { max-width: 860px; }
+.merge-source { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+.field-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; }
+.field-chips li {
+  background: var(--base);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  padding: 2px 7px;
+}
+.merge-table-wrap { max-height: 40vh; overflow: auto; border: 1px solid var(--border-light); border-radius: 3px; }
+
+/* ---------------------------------------------------------------- files page */
+.files-page { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 10px 12px; gap: 8px; }
+.files-intro { display: flex; align-items: center; gap: 12px; }
+.files-intro p { margin: 0; flex: 1; }
+.file-browser { display: grid; grid-template-columns: 180px 1fr; gap: 10px; flex: 1; min-height: 0; }
+.files-page .file-table { height: auto; flex: 1; }
+.file-toolbar { border: 1px solid var(--border-light); border-radius: 3px; background: var(--window-alt); }
+
+/* ------------------------------------------------------------------ printers */
+.printers-dialog { width: min(820px, 94vw); }
+.printer-form { margin-top: 10px; background: var(--base); }
+.printer-status { color: var(--text-muted); padding-left: 104px; }
+.probe-result { margin: 6px 0; padding: 6px 8px; background: var(--window-alt); border: 1px solid var(--border-light); border-radius: 3px; }
+.probe-result p { margin: 0 0 4px; }
+.job-list { list-style: none; margin: 0; padding: 0; }
+.job-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 5px 0;
+}
+.job-list li + li { border-top: 1px solid var(--border-light); }
+.job-title { font-weight: 600; }
+.job-meta { grid-column: 1; color: var(--text-muted); font-size: 12px; }
+.job-list .linklike { grid-row: 1 / span 2; align-self: center; }
+.saving-hint { color: var(--text-muted); font-style: italic; }
+
+/* Brief confirmation after a manual save. */
+.saved-flash {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border: 1px solid #9dc2de;
+  border-radius: 3px;
+  background: var(--highlight-soft);
+  color: var(--text);
+  font-size: 12px;
+  animation: saved-flash-in 0.15s ease-out;
+}
+@keyframes saved-flash-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ------------------------------------------------------- product definitions */
+.template-editor { width: min(1000px, 96vw); }
+.template-body { display: grid; grid-template-columns: 1fr 340px; gap: 12px; align-items: start; }
+.template-form { overflow: auto; max-height: 62vh; padding-right: 4px; }
+.template-form fieldset { background: var(--base); }
+.template-form .form-row > label:first-child { width: 150px; }
+.template-preview {
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px;
+  position: sticky;
+  top: 0;
+}
+.template-preview h3 { margin: 0 0 6px; font-size: 1rem; }
+.template-preview .sheet-preview { max-height: 320px; }
+
+/* ------------------------------------------------------ question and message */
+/* Above the regular dialogs, so a question also works from inside a dialog. */
+.question-backdrop { z-index: 200; }
+.question-modal { width: min(460px, 92vw); }
+.question-text { margin: 0; line-height: 1.45; }
+.question-modal .form-row > label:first-child { width: auto; text-align: left; }
+button.destructive { border-color: #a33; box-shadow: inset 0 0 0 1px #e0b4b4; }
+.preferences { width: min(560px, 94vw); }
+.preferences fieldset { background: var(--base); }
+
+/* The file in the folder was changed outside the app: choose a version. */
+.page-error.file-conflict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-error.file-conflict span { flex: 1 1 auto; }
+
+/* Jobs: count and Clean up above the list, Show more below it. */
+.job-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.job-more { justify-self: start; }
+
+/* Open on phone: a QR code with the address under it. */
+.phone-dialog { width: min(360px, 92vw); }
+.phone-body { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.phone-body p { margin: 0; }
+.phone-qr { width: 240px; height: 240px; background: #fff; border: 1px solid var(--border-light); }
+.phone-url { font-size: 12px; word-break: break-all; user-select: all; color: var(--text-muted); }
+.quick-toolbar .text-tool { display: inline-flex; align-items: center; gap: 5px; }
