@@ -4,6 +4,7 @@ import type { DocumentDetail, DocumentObject } from '../api/types'
 import { useT } from '../i18n'
 import { labelSize } from './label'
 import { boundsOf, cssColor, isSized } from './objects'
+import { layoutText, useFontsVersion } from './textLayout'
 
 type Drag =
   | { kind: 'move'; startX: number; startY: number; origin: DocumentObject[] }
@@ -64,6 +65,8 @@ function LabelOutline({ document: doc }: { document: DocumentDetail }) {
 
 function ObjectShape({ object, docId }: { object: DocumentObject; docId: string }) {
   const t = useT()
+  // Text is measured with the label's fonts; measure again once they are in.
+  useFontsVersion()
   switch (object.type) {
     case 'box':
       return (
@@ -99,33 +102,29 @@ function ObjectShape({ object, docId }: { object: DocumentObject; docId: string 
         />
       )
     case 'text': {
-      const lineHeight = object.font_size * object.line_spacing
-      const anchor = object.align === 'center' ? 'middle' : object.align === 'right' ? 'end' : 'start'
-      const x = object.align === 'center' ? object.w_pt / 2 : object.align === 'right' ? object.w_pt : 0
-      const blockHeight = lineHeight * Math.max(1, object.lines.length)
-      const top =
-        object.valign === 'center'
-          ? (object.h_pt - blockHeight) / 2
-          : object.valign === 'bottom'
-            ? object.h_pt - blockHeight
-            : 0
+      const layout = layoutText(object)
+      const clipId = `clip-${object.id ?? 'text'}`
       return (
-        <text
-          fill={cssColor(object.color)}
-          fontFamily={object.font_family}
-          fontSize={object.font_size}
-          fontWeight={object.font_weight}
-          fontStyle={object.font_italic ? 'italic' : 'normal'}
-          textDecoration={object.font_underline ? 'underline' : 'none'}
-          textAnchor={anchor}
-          xmlSpace="preserve"
-        >
-          {object.lines.map((line, index) => (
-            <tspan key={index} x={x} y={top + object.font_size * 0.85 + index * lineHeight}>
-              {line}
-            </tspan>
-          ))}
-        </text>
+        <g clipPath={`url(#${clipId})`}>
+          <clipPath id={clipId}>
+            <rect width={object.w_pt} height={object.h_pt} />
+          </clipPath>
+          <text
+            fill={cssColor(object.color)}
+            fontFamily={`${JSON.stringify(object.font_family)}, "DejaVu Sans", sans-serif`}
+            fontSize={layout.fontSize}
+            fontWeight={object.font_weight}
+            fontStyle={object.font_italic ? 'italic' : 'normal'}
+            textDecoration={object.font_underline ? 'underline' : 'none'}
+            xmlSpace="preserve"
+          >
+            {layout.lines.map((line, index) => (
+              <tspan key={index} x={line.x} y={line.y}>
+                {line.text}
+              </tspan>
+            ))}
+          </text>
+        </g>
       )
     }
     case 'barcode':

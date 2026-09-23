@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from .sfnt import FontError, read_names
+from .sfnt import FontError, FontMetrics, read_metrics, read_names
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ class FontFace:
     source: Literal["builtin", "uploaded"]
     path: Path
     size_bytes: int
+    metrics: FontMetrics | None = None
 
     @property
     def bold(self) -> bool:
@@ -82,6 +83,12 @@ class FontLibrary:
             count += 1
             newest = max(newest, path.stat().st_mtime)
         return (newest, count)
+
+    @property
+    def stamp(self) -> str:
+        """Changes whenever the uploaded fonts change."""
+        newest, count = self._stamp or (0.0, 0)
+        return f"{newest:.0f}-{count}"
 
     def refresh_if_changed(self) -> bool:
         """Reload when something changed outside the web interface."""
@@ -126,6 +133,7 @@ class FontLibrary:
             source=source,
             path=path,
             size_bytes=len(data),
+            metrics=read_metrics(data),
         )
 
     # ------------------------------------------------------------------ queries

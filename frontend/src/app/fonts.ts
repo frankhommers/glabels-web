@@ -16,6 +16,11 @@ export type FontFace = {
   size_bytes: number
   url: string
   media_type: string
+  /** Vertical metrics in font units, for laying out text like the renderer. */
+  units_per_em?: number | null
+  ascender?: number | null
+  descender?: number | null
+  line_gap?: number | null
 }
 
 export type FontFamily = {
@@ -23,6 +28,8 @@ export type FontFamily = {
   source: 'builtin' | 'uploaded'
   faces: FontFace[]
 }
+
+import { registerFontMetrics } from '../editor/textLayout'
 
 const STYLE_ELEMENT_ID = 'glabels-server-fonts'
 
@@ -34,6 +41,7 @@ export async function fetchFonts(): Promise<FontFamily[]> {
 
 /** Set up @font-face rules for all fonts from the server. */
 export function applyFonts(families: FontFamily[]): void {
+  registerFontMetrics(families.flatMap((family) => family.faces))
   const rules = families
     .flatMap((family) => family.faces)
     .map((face) => {

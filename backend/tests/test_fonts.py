@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from glabels_web import settings as settings_module
 from glabels_web.fonts import FontError, FontLibrary, read_names
+from glabels_web.fonts.sfnt import read_metrics
 from glabels_web.main import create_app
 
 
@@ -35,6 +36,18 @@ def test_family_name_from_the_file(fonts_dir):
     names = read_names(path.read_bytes())
     assert names.family == "Liberation Sans"
     assert names.subfamily in ("Regular", "Normal")
+
+
+def test_vertical_metrics_from_the_file(fonts_dir):
+    # Liberation Sans has Arial's metrics: 2048 units, ascender 1854,
+    # descender -434, line gap 67 (hhea).
+    path = next(fonts_dir.rglob("LiberationSans-Regular.ttf"))
+    metrics = read_metrics(path.read_bytes())
+    assert metrics is not None
+    assert metrics.units_per_em == 2048
+    assert metrics.ascender == 1854
+    assert metrics.descender == -434
+    assert metrics.line_gap == 67
 
 
 def test_non_font_is_refused():
@@ -75,10 +88,23 @@ def test_api_serves_families_and_files(client, fonts_dir):
     assert any(item["family"] == "Liberation Sans" for item in families)
 
     face = next(item for item in families if item["family"] == "Liberation Sans")["faces"][0]
+    # The editor lays out text with these, like the renderer.
+    assert face["units_per_em"] == 2048 and face["ascender"] > 0 and face["descender"] < 0
     response = client.get(face["url"])
     assert response.status_code == 200
     assert response.headers["content-type"] == "font/ttf"
     assert response.content[:4] in (b"\x00\x01\x00\x00", b"true", b"OTTO")
+
+
+def test_the_font_stamp_changes_with_the_uploads(fonts_dir, tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    library = FontLibrary(fonts_dir, uploads)
+    before = library.stamp
+    source = next(fonts_dir.rglob("LiberationSans-Regular.ttf"))
+    (uploads / "extra.ttf").write_bytes(source.read_bytes())
+    assert library.refresh_if_changed()
+    assert library.stamp != before
 
 
 def test_api_upload_and_delete(client, fonts_dir):

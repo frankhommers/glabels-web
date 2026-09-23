@@ -48,7 +48,8 @@ def _decode(raw: bytes, platform_id: int, encoding_id: int) -> str | None:
         return None
 
 
-def read_names(data: bytes) -> FontNames:
+def _tables(data: bytes) -> dict[bytes, tuple[int, int]]:
+    """Offset and length of each table of the (first) font in the file."""
     if len(data) < 12:
         raise FontError("file too small for a font")
 
@@ -69,18 +70,22 @@ def read_names(data: bytes) -> FontNames:
         raise FontError("incomplete font file")
 
     num_tables = struct.unpack_from(">H", data, offset + 4)[0]
-    name_offset = name_length = None
+    tables: dict[bytes, tuple[int, int]] = {}
     for index in range(num_tables):
         record = offset + 12 + index * 16
         if len(data) < record + 16:
             raise FontError("incomplete table directory")
         table_tag, _checksum, table_offset, table_length = struct.unpack_from(">4sIII", data, record)
-        if table_tag == b"name":
-            name_offset, name_length = table_offset, table_length
-            break
+        if len(data) >= table_offset + table_length:
+            tables[table_tag] = (table_offset, table_length)
+    return tables
 
-    if name_offset is None or name_length is None or len(data) < name_offset + 6:
+
+def read_names(data: bytes) -> FontNames:
+    name = _tables(data).get(b"name")
+    if name is None or len(data) < name[0] + 6:
         raise FontError("font without a name table")
+    name_offset = name[0]
 
     count, string_offset = struct.unpack_from(">HH", data, name_offset + 2)
     found: dict[int, str] = {}
@@ -109,3 +114,50 @@ def read_names(data: bytes) -> FontNames:
     subfamily = found.get(NAME_TYPOGRAPHIC_SUBFAMILY) or found.get(NAME_SUBFAMILY) or "Regular"
     full_name = found.get(NAME_FULL) or f"{family} {subfamily}".strip()
     return FontNames(family=family, subfamily=subfamily, full_name=full_name)
+
+
+@dataclass(frozen=True)
+class FontMetrics:
+    """Vertical metrics in font units, as the renderer's text layout uses them.
+
+    The editor places text with these, so a line sits where gLabels puts it:
+    the first baseline one ascent below the top, lines one line spacing apart.
+    """
+
+    units_per_em: int
+    ascender: int
+    descender: int  # negative: below the baseline
+    line_gap: int
+
+
+# OS/2 fsSelection bit 7: the typographic metrics are the ones to use.
+_USE_TYPO_METRICS = 1 << 7
+
+
+def read_metrics(data: bytes) -> FontMetrics | None:
+    """The vertical metrics, or None when the tables are missing or odd."""
+    tables = _tables(data)
+    head, hhea, os2 = tables.get(b"head"), tables.get(b"hhea"), tables.get(b"OS/2")
+    if head is None or hhea is None or head[1] < 20 or hhea[1] < 12:
+        return None
+    units_per_em = struct.unpack_from(">H", data, head[0] + 18)[0]
+    if not 16 <= units_per_em <= 16384:
+        return None
+    ascender, descender, line_gap = struct.unpack_from(">hhh", data, hhea[0] + 4)
+
+    if os2 is not None and os2[1] >= 78:
+        fs_selection = struct.unpack_from(">H", data, os2[0] + 62)[0]
+        typo_ascender, typo_descender, typo_gap = struct.unpack_from(">hhh", data, os2[0] + 68)
+        win_ascent, win_descent = struct.unpack_from(">HH", data, os2[0] + 74)
+        if fs_selection & _USE_TYPO_METRICS and typo_ascender:
+            ascender, descender, line_gap = typo_ascender, typo_descender, typo_gap
+        elif ascender == 0 and descender == 0:
+            # FreeType falls back like this when hhea says nothing.
+            if typo_ascender or typo_descender:
+                ascender, descender, line_gap = typo_ascender, typo_descender, typo_gap
+            else:
+                ascender, descender, line_gap = win_ascent, -win_descent, 0
+
+    if ascender <= 0:
+        return None
+    return FontMetrics(units_per_em, ascender, -abs(descender), max(0, line_gap))

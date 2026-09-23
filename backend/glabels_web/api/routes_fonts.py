@@ -28,6 +28,12 @@ class FontFaceOut(BaseModel):
     size_bytes: int
     url: str
     media_type: str
+    # Vertical metrics in font units, so the editor lays out text like the
+    # renderer does. Absent when the font does not say.
+    units_per_em: int | None = None
+    ascender: int | None = None
+    descender: int | None = None
+    line_gap: int | None = None
 
 
 class FontFamilyOut(BaseModel):
@@ -48,6 +54,16 @@ def _face_out(face) -> FontFaceOut:
         size_bytes=face.size_bytes,
         url=f"/api/fonts/{face.id}/file",
         media_type=face.media_type,
+        **(
+            {
+                "units_per_em": face.metrics.units_per_em,
+                "ascender": face.metrics.ascender,
+                "descender": face.metrics.descender,
+                "line_gap": face.metrics.line_gap,
+            }
+            if face.metrics
+            else {}
+        ),
     )
 
 
