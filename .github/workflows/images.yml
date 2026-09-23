@@ -42,7 +42,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Image names
         id: names
@@ -52,16 +52,16 @@ jobs:
           echo "renderer=${REGISTRY}/${owner}/glabels-web-renderer:${suffix}" >> "$GITHUB_OUTPUT"
           echo "app=${REGISTRY}/${owner}/glabels-web:${suffix}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Renderer
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/renderer.Dockerfile
@@ -77,7 +77,7 @@ jobs:
           cache-to: type=gha,scope=renderer-${{ matrix.arch }},mode=max
 
       - name: Application
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/app.Dockerfile
@@ -97,9 +97,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -115,7 +115,7 @@ jobs:
           docker tag "$image" glabels-web/renderer:dev
           ./scripts/sync-vendor.sh glabels-web/renderer:dev
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10
 
       - name: Backend tests
         working-directory: backend
@@ -128,9 +128,9 @@ jobs:
     needs: [build, test]
     runs-on: ubuntu-24.04
     steps:
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -138,26 +138,29 @@ jobs:
 
       - name: Tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
-          images: IMAGE
+          images: placeholder
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=long
 
+      # The metadata action only computes the tag names; they are applied to
+      # both images here.
       - name: Multi-architecture manifests
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
+          METADATA: ${{ steps.meta.outputs.json }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
+          mapfile -t names < <(jq -r '."tag-names"[]' <<< "$METADATA")
           for name in glabels-web glabels-web-renderer; do
             image="${REGISTRY}/${owner}/${name}"
             args=()
-            while read -r tag; do
-              [ -n "$tag" ] && args+=(-t "${image}:${tag#IMAGE:}")
-            done <<< "$TAGS"
+            for tag in "${names[@]}"; do
+              args+=(-t "${image}:${tag}")
+            done
             docker buildx imagetools create "${args[@]}" \
               "${image}:sha-${GITHUB_SHA::12}-amd64" \
               "${image}:sha-${GITHUB_SHA::12}-arm64"
