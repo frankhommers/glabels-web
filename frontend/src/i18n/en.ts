@@ -526,7 +526,7 @@ export const en = {
   'fileBrowser.productDefinitions': 'Product definitions',
   'fileBrowser.fonts': 'Fonts',
   'projects.location': 'Location',
-  'projects.internalOnly': 'Only in the app',
+  'projects.internalOnly': 'Not saved as a file',
   'projects.fileMissing': 'File missing',
   'projects.fileChanged': 'Changed outside the app',
   'projects.rename': 'Rename…',

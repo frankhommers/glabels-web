@@ -521,7 +521,7 @@ export const nl: Messages = {
   'fileBrowser.productDefinitions': 'Productdefinities',
   'fileBrowser.fonts': 'Lettertypen',
   'projects.location': 'Locatie',
-  'projects.internalOnly': 'Alleen in de app',
+  'projects.internalOnly': 'Niet als bestand opgeslagen',
   'projects.fileMissing': 'Bestand ontbreekt',
   'projects.fileChanged': 'Buiten de app gewijzigd',
   'projects.rename': 'Naam wijzigen…',
