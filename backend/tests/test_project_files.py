@@ -192,3 +192,28 @@ def test_the_list_shows_the_state_of_each_file(client, folder):
         gone["id"]: "missing",
         internal["id"]: "none",
     }
+
+
+def test_merge_source_is_relative_to_the_document_file(client, folder):
+    (folder / "merges").mkdir(parents=True)
+    (folder / "merges" / "addresses.csv").write_text("name,city\nAda,London\n")
+    (folder / "labels").mkdir()
+    doc = _new(client)
+    client.post(f"/api/documents/{doc['id']}/save-as", json={"path": "labels", "name": "Post"})
+
+    chosen = client.put(
+        f"/api/documents/{doc['id']}/merge",
+        json={"type": "Text/Comma/Line1Keys", "source_path": "merges/addresses.csv"},
+    )
+    assert chosen.status_code == 200, chosen.text
+    assert chosen.json()["merge"]["src"] == "../merges/addresses.csv"
+    # The file in the folder follows right away, as with every other change.
+    assert b'src="../merges/addresses.csv"' in (folder / "labels" / "Post.glabels").read_bytes()
+    assert chosen.json()["file_state"] == "linked"
+
+    # Saved into another folder, the document reaches the source another way.
+    moved = client.post(f"/api/documents/{doc['id']}/save-as", json={"path": "", "name": "Post"})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["merge"]["src"] == "merges/addresses.csv"
+    assert moved.json()["merge"]["available"] is True
+    assert b'src="merges/addresses.csv"' in (folder / "Post.glabels").read_bytes()

@@ -221,11 +221,11 @@ Files can also be put on the volume directly; the web interface picks them
 up. The application never opens anything outside this folder: every path from
 a request is checked against the base folder first, symbolic links included.
 
-A merge source is stored in the document as a bare file name
-(`<Merge type="Text/Comma" src="addresses.csv"/>`). That is exactly what
-gLabels Qt expects — it looks for the source next to the document file — so
-the file stays usable on a desktop. Where the file lives on this server is
-application metadata and is kept in SQLite, not in the `.glabels` file.
+A merge source is stored in the document relative to the document's folder
+(`<Merge type="Text/Comma" src="merges/addresses.csv"/>`), the way gLabels Qt
+writes it and looks for it, so the file stays usable on a desktop. Saving the
+project into another folder adjusts that path. Which file in the shared folder
+is the source is also kept in SQLite.
 
 ## Documentation
 

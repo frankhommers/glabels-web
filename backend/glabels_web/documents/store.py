@@ -298,9 +298,8 @@ class DocumentStore:
     def set_merge_source(self, doc_id: str, path: str | None) -> DocumentInfo:
         """Remember which file in the shared folder is the merge source.
 
-        The document itself only holds a bare file name, so it stays usable on
-        a desktop; where that file lives here is application metadata and
-        belongs in the database.
+        The document itself refers to it relative to its own folder, as the
+        desktop app does; the path in the shared folder is kept here as well.
         """
         self.info(doc_id)
         with self._connect() as conn:

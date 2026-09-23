@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import posixpath
 import re
 from dataclasses import replace
 
@@ -163,6 +164,13 @@ def _write_through(app: AppState, doc_id: str, *, force: bool = False) -> None:
         log.warning("file %s could not be updated: %s", path, exc)
         return
     app.store.set_file_link(doc_id, path, _sha(raw))
+
+
+def _merge_src(source_path: str, file_path: str | None) -> str:
+    """The merge source as the document refers to it: relative to the folder
+    the document file is in, which is where gLabels on a desktop looks."""
+    folder = posixpath.dirname(file_path) if file_path else ""
+    return posixpath.relpath(source_path, folder or ".")
 
 
 def _document_filename(name: str) -> str:
@@ -742,6 +750,15 @@ def save_as(doc_id: str, request: SaveAsRequest, app: AppState = Depends(state))
         # A fixed code, so the interface can ask for confirmation.
         raise HTTPException(status_code=409, detail="file-exists")
 
+    # In another folder the merge source is reached by another relative path.
+    info, doc = _load(app, doc_id)
+    spec = doc.merge()
+    if spec is not None and spec.type != "None" and info.merge_source_path:
+        src = _merge_src(info.merge_source_path, target)
+        if src != spec.src:
+            doc.set_merge(spec.type, src)
+            app.store.save_revision(doc_id, doc.to_bytes(), object_ids=doc.object_ids())
+
     raw = app.store.read_revision(doc_id)
     try:
         app.files.write_file(target, raw)
@@ -842,13 +859,14 @@ def set_merge(doc_id: str, request: MergeSettingsRequest, app: AppState = Depend
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if entry.is_dir:
             raise HTTPException(status_code=400, detail="choose a file, not a folder")
-        src_name = entry.name
+        src_name = _merge_src(entry.path, info.file_path)
     else:
         src_name = None
 
     doc.set_merge(request.type, src_name)
     info = app.store.save_revision(doc_id, doc.to_bytes(), object_ids=doc.object_ids())
     info = app.store.set_merge_source(doc_id, source_path if request.type != "None" else None)
+    _write_through(app, doc_id)
     return _detail(app, info, doc)
 
 

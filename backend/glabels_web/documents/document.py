@@ -575,8 +575,8 @@ class Document:
 
         The DTD prescribes the order: Template, Objects+, Merge?, Variables?,
         Data*. So we place the element right after the last Objects section.
-        ``src`` stays a bare file name: the desktop app looks for it next to
-        the document file.
+        ``src`` is relative to the folder of the document file, the way the
+        desktop app writes it and looks for it.
         """
         existing = self._root.find("Merge")
 

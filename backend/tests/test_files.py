@@ -187,8 +187,7 @@ def test_set_merge_and_preview(client):
     assert body["merge"]["src"] == "addresses.csv"
     assert body["merge"]["available"] is True
 
-    # The file only holds the bare file name, so it stays usable on a
-    # desktop.
+    # Relative to the document's folder, so it stays usable on a desktop.
     export = client.get(f"/api/documents/{doc['id']}/file").content
     assert b'<Merge type="Text/Comma/Line1Keys" src="addresses.csv"/>' in export
 

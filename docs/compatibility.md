@@ -101,11 +101,12 @@ Supported source types, with the id as it appears in the file:
 
 Points of attention:
 
-- The source is stored in the document as a **bare file name**. Upstream
-  resolves it relative to the document's folder, so a `.glabels` with the CSV
-  next to it works on a desktop too.
-- When rendering we put the chosen source under that same name next to the
-  document, and also pass it with `--input`.
+- The source is stored in the document **relative to the document's folder**
+  (`addresses.csv`, `merges/addresses.csv`), which is how upstream writes and
+  resolves it, so the `.glabels` file keeps working on a desktop. Saving the
+  project into another folder rewrites the path.
+- When rendering we put the chosen source next to the document under its file
+  name, and also pass it with `--input`.
 - The data preview in the interface is an approximation with Python's CSV
   parser. Upstream has its own parser with backslash escapes; where they
   differ, the renderer's output is authoritative.
