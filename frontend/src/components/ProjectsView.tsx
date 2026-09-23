@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { DocumentInfo } from '../api/types'
+import type { DocumentInfo, DocumentListItem } from '../api/types'
 import { formatMoment } from '../app/locale'
 import { useT } from '../i18n'
 import { useDialogs } from '../ui/dialogs'
@@ -39,7 +39,7 @@ export function ProjectsView({
 }) {
   const t = useT()
   const dialogs = useDialogs()
-  const [projects, setProjects] = useState<DocumentInfo[]>([])
+  const [projects, setProjects] = useState<DocumentListItem[]>([])
   const [problem, setProblem] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -126,7 +126,7 @@ export function ProjectsView({
           <thead>
             <tr>
               <th>{t('fileBrowser.name')}</th>
-              <th>{t('projects.file')}</th>
+              <th>{t('projects.location')}</th>
               <th>{t('fileBrowser.product')}</th>
               <th>{t('fileBrowser.modified')}</th>
             </tr>
@@ -150,7 +150,9 @@ export function ProjectsView({
                     <Icon name="glabels-file-new" size={16} />
                     {project.name}
                   </td>
-                  <td>{project.file_path ?? <em className="muted">{t('projects.noFile')}</em>}</td>
+                  <td title={project.file_path ?? undefined}>
+                    <Location project={project} />
+                  </td>
                   <td>
                     {project.template_brand} {project.template_part}
                   </td>
@@ -165,4 +167,22 @@ export function ProjectsView({
       </div>
     </div>
   )
+}
+
+/** Where a project lives. The file is named after the project, so the folder
+ *  is what tells projects apart; the full path is in the tooltip. */
+function Location({ project }: { project: DocumentListItem }) {
+  const t = useT()
+  const path = project.file_path
+  if (!path || project.file_state === 'none') {
+    return <em className="muted">{t('projects.internalOnly')}</em>
+  }
+  if (project.file_state === 'missing') {
+    return <span className="file-state-problem">{t('projects.fileMissing')}</span>
+  }
+  if (project.file_state === 'conflict') {
+    return <span className="file-state-problem">{t('projects.fileChanged')}</span>
+  }
+  const folders = path.split('/').slice(0, -1)
+  return <>{[t('fileBrowser.sharedFolder'), ...folders].join(' › ')}</>
 }

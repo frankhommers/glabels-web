@@ -186,6 +186,11 @@ class DocumentInfo(BaseModel):
     file_path: str | None = None
 
 
+class DocumentListItem(DocumentInfo):
+    # State of the linked file, as in `DocumentDetail`.
+    file_state: str = "none"
+
+
 class DocumentDetail(DocumentInfo):
     # State of the linked file in the folder:
     #   none      not saved under a name yet

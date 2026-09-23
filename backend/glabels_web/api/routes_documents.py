@@ -21,6 +21,7 @@ from ..documents.models import (
     DocumentContent,
     DocumentDetail,
     DocumentInfo,
+    DocumentListItem,
     Limitation,
 )
 from ..documents.store import DocumentNotFound
@@ -195,9 +196,14 @@ def _load(app: AppState, doc_id: str) -> tuple[DocumentInfo, Document]:
     return info, doc
 
 
-@router.get("", response_model=list[DocumentInfo])
-def list_documents(app: AppState = Depends(state)) -> list[DocumentInfo]:
-    return app.store.list()
+@router.get("", response_model=list[DocumentListItem])
+def list_documents(app: AppState = Depends(state)) -> list[DocumentListItem]:
+    # With the state of each file, so the list can show which ones are gone
+    # or were changed outside the app.
+    return [
+        DocumentListItem(**info.model_dump(), file_state=_file_state(app, info.id))
+        for info in app.store.list()
+    ]
 
 
 @router.post("", response_model=DocumentDetail, status_code=201)

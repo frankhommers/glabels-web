@@ -2,6 +2,7 @@ import type {
   DocumentContent,
   DocumentDetail,
   DocumentInfo,
+  DocumentListItem,
   Health,
   MergePreview,
   PreviewInfo,
@@ -81,7 +82,7 @@ export const api = {
       method: 'DELETE',
     }),
 
-  listDocuments: () => request<DocumentInfo[]>('/api/documents'),
+  listDocuments: () => request<DocumentListItem[]>('/api/documents'),
 
   createDocument: (body: { name: string; brand: string; part: string; rotate?: boolean }) =>
     request<DocumentDetail>('/api/documents', { method: 'POST', body: JSON.stringify(body) }),

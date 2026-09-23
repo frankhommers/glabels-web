@@ -169,3 +169,26 @@ def test_renaming_a_project_without_file_leaves_the_folder_alone(client, folder)
     info = client.put(f"/api/documents/{doc['id']}/name", json={"name": "Loose"}).json()
     assert info["name"] == "Loose"
     assert info["file_path"] is None
+
+
+def test_the_list_shows_the_state_of_each_file(client, folder):
+    kept = _new(client)
+    changed = _new(client)
+    gone = _new(client)
+    internal = _new(client)
+    folder.mkdir(parents=True, exist_ok=True)
+    for doc, name in ((kept, "Kept"), (changed, "Changed"), (gone, "Gone")):
+        response = client.post(
+            f"/api/documents/{doc['id']}/save-as", json={"path": "", "name": name}
+        )
+        assert response.status_code == 200, response.text
+    (folder / "Changed.glabels").write_bytes(b"<Glabels-document/>")
+    (folder / "Gone.glabels").unlink()
+
+    states = {item["id"]: item["file_state"] for item in client.get("/api/documents").json()}
+    assert states == {
+        kept["id"]: "linked",
+        changed["id"]: "conflict",
+        gone["id"]: "missing",
+        internal["id"]: "none",
+    }
