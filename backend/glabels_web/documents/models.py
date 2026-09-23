@@ -189,6 +189,9 @@ class DocumentInfo(BaseModel):
 class DocumentListItem(DocumentInfo):
     # State of the linked file, as in `DocumentDetail`.
     file_state: str = "none"
+    # Designed a quarter turn from the product: the print, and so its
+    # preview, lies on its side. A phone turns it back for display.
+    rotate: bool = False
 
 
 class DocumentDetail(DocumentInfo):

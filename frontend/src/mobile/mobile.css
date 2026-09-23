@@ -84,6 +84,17 @@
   background: var(--window-alt);
   border-radius: 4px;
 }
+.mobile-list img,
+.mobile-thumb {
+  display: block;
+}
+.mobile-thumb {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  background: var(--window-alt);
+  border-radius: 4px;
+}
 .mobile-list-text { display: flex; flex-direction: column; min-width: 0; }
 .mobile-list-text strong,
 .mobile-list-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

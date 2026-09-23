@@ -129,7 +129,7 @@ export type DocumentInfo = {
 export type FileState = 'none' | 'linked' | 'conflict' | 'missing'
 
 /** A project in the list, with the state of its file. */
-export type DocumentListItem = DocumentInfo & { file_state: FileState }
+export type DocumentListItem = DocumentInfo & { file_state: FileState; rotate: boolean }
 
 export type Markup = { type: string; values: Record<string, number> }
 

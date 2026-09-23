@@ -225,3 +225,12 @@ def test_pages_never_leave_the_web_root(web_client, path):
     response = web_client.get(path)
     assert "not for you" not in response.text
     assert "root:" not in response.text
+
+
+def test_the_list_says_which_designs_are_turned(client):
+    upright = client.post("/api/documents", json={"name": "a", "brand": "Avery", "part": "5095"}).json()
+    turned = client.post(
+        "/api/documents", json={"name": "b", "brand": "Avery", "part": "5095", "rotate": True}
+    ).json()
+    listed = {item["id"]: item["rotate"] for item in client.get("/api/documents").json()}
+    assert listed == {upright["id"]: False, turned["id"]: True}

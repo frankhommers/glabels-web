@@ -14,10 +14,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { newRequestId, printers as printerApi, type Printer } from '../api/printers'
-import type { DocumentDetail, DocumentInfo, DocumentObject, PrintSettings, TextObject } from '../api/types'
+import type { DocumentDetail, DocumentListItem, DocumentObject, PrintSettings, TextObject } from '../api/types'
+import { applyFonts, fetchFonts } from '../app/fonts'
 import { DEFAULT_PRINT_SETTINGS } from '../app/session'
 import { useT } from '../i18n'
 import './mobile.css'
+import { useUprightSrc } from './upright'
 import { MOBILE_BASE, openFullEditor } from './view'
 
 function idFromPath(pathname: string): string | null {
@@ -33,6 +35,13 @@ const PREVIEW_SETTINGS: PrintSettings = { ...DEFAULT_PRINT_SETTINGS, copies: 1, 
 
 export function MobileApp() {
   const [docId, setDocId] = useState<string | null>(() => idFromPath(window.location.pathname))
+
+  // The label's own fonts, so each text field shows the font it prints in.
+  useEffect(() => {
+    fetchFonts()
+      .then(applyFonts)
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const onPop = () => setDocId(idFromPath(window.location.pathname))
@@ -56,7 +65,7 @@ export function MobileApp() {
 // ------------------------------------------------------------------ list
 function ListScreen({ onOpen }: { onOpen: (id: string) => void }) {
   const t = useT()
-  const [labels, setLabels] = useState<DocumentInfo[] | null>(null)
+  const [labels, setLabels] = useState<DocumentListItem[] | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
@@ -77,25 +86,31 @@ function ListScreen({ onOpen }: { onOpen: (id: string) => void }) {
         {labels && labels.length === 0 ? <p className="mobile-note">{t('mobile.noLabels')}</p> : null}
         <ul className="mobile-list">
           {(labels ?? []).map((label) => (
-            <li key={label.id}>
-              <button type="button" onClick={() => onOpen(label.id)}>
-                <img
-                  src={api.previewImageUrl(label.id, PREVIEW_SETTINGS, 1, 40, label.revision)}
-                  alt=""
-                  loading="lazy"
-                />
-                <span className="mobile-list-text">
-                  <strong>{label.name}</strong>
-                  <span>
-                    {label.template_brand} {label.template_part}
-                  </span>
-                </span>
-              </button>
-            </li>
+            <ListItem key={label.id} label={label} onOpen={onOpen} />
           ))}
         </ul>
       </main>
     </>
+  )
+}
+
+function ListItem({ label, onOpen }: { label: DocumentListItem; onOpen: (id: string) => void }) {
+  const preview = useUprightSrc(
+    api.previewImageUrl(label.id, PREVIEW_SETTINGS, 1, 40, label.revision),
+    label.rotate,
+  )
+  return (
+    <li>
+      <button type="button" onClick={() => onOpen(label.id)}>
+        {preview ? <img src={preview} alt="" loading="lazy" /> : <span className="mobile-thumb" />}
+        <span className="mobile-list-text">
+          <strong>{label.name}</strong>
+          <span>
+            {label.template_brand} {label.template_part}
+          </span>
+        </span>
+      </button>
+    </li>
   )
 }
 
@@ -115,6 +130,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const t = useT()
   const [detail, setDetail] = useState<DocumentDetail | null>(null)
   const [texts, setTexts] = useState<string[]>([])
+  const [fontsOf, setFontsOf] = useState<TextObject[]>([])
   const [copies, setCopies] = useState(1)
   const [printerList, setPrinterList] = useState<Printer[] | null>(null)
   const [printer, setPrinter] = useState('')
@@ -137,6 +153,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       .then((loaded) => {
         setDetail(loaded)
         setTexts(textObjects(loaded.content.objects).map((object) => object.lines.join('\n')))
+        setFontsOf(textObjects(loaded.content.objects))
       })
       .catch((error) => setProblem(String(error instanceof Error ? error.message : error)))
     printerApi
@@ -244,6 +261,11 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     }
   }, [printState])
 
+  const preview = useUprightSrc(
+    detail ? api.previewImageUrl(detail.id, PREVIEW_SETTINGS, 1, 150, detail.revision) : '',
+    detail?.content.rotate ?? false,
+  )
+
   const locked = detail?.limitations.some((limitation) => limitation.blocks_editing) ?? false
   const busy = printState.phase === 'sending' || printState.phase === 'waiting'
 
@@ -263,10 +285,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
         {detail ? (
           <>
             <div className="mobile-preview">
-              <img
-                src={api.previewImageUrl(detail.id, PREVIEW_SETTINGS, 1, 150, detail.revision)}
-                alt={detail.name}
-              />
+              {preview ? <img src={preview} alt={detail.name} /> : null}
               {saving ? <span className="mobile-saving">{t('mobile.saving')}</span> : null}
             </div>
 
@@ -276,6 +295,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
               <label key={index} className="mobile-field">
                 {texts.length > 1 ? <span>{t('mobile.text', { number: index + 1 })}</span> : null}
                 <textarea
+                  style={fontStyle(fontsOf[index])}
                   value={text}
                   rows={Math.max(2, text.split('\n').length)}
                   disabled={locked}
@@ -336,6 +356,16 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       ) : null}
     </>
   )
+}
+
+/** The object's font in its field; the size stays 16 px so iOS does not zoom. */
+function fontStyle(object: TextObject | undefined) {
+  if (!object) return undefined
+  return {
+    fontFamily: `${JSON.stringify(object.font_family)}, system-ui, sans-serif`,
+    fontWeight: object.font_weight,
+    fontStyle: object.font_italic ? 'italic' : 'normal',
+  }
 }
 
 function PrintStatus({ state }: { state: PrintState }) {

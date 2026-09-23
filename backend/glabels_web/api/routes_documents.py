@@ -201,9 +201,19 @@ def list_documents(app: AppState = Depends(state)) -> list[DocumentListItem]:
     # With the state of each file, so the list can show which ones are gone
     # or were changed outside the app.
     return [
-        DocumentListItem(**info.model_dump(), file_state=_file_state(app, info.id))
+        DocumentListItem(
+            **info.model_dump(), file_state=_file_state(app, info.id), rotate=_rotated(app, info.id)
+        )
         for info in app.store.list()
     ]
+
+
+def _rotated(app: AppState, doc_id: str) -> bool:
+    try:
+        raw = app.store.read_revision(doc_id)
+        return Document.from_bytes(raw, max_uncompressed_bytes=app.settings.max_upload_bytes).rotate
+    except (DocumentNotFound, ValueError, XmlError):
+        return False
 
 
 @router.post("", response_model=DocumentDetail, status_code=201)
@@ -425,6 +435,10 @@ async def _ensure_pdf(app: AppState, doc_id: str, settings: PrintSettings) -> tu
     # time is part of the cache key, so an updated CSV gives a new preview.
     merge_source = None
     cache_key = settings.key()
+    # The fonts too: a label rendered before its font was added must not
+    # keep showing the stand-in.
+    app.fonts.refresh_if_changed()
+    cache_key = f"{cache_key}|fonts:{app.fonts.stamp}"
     spec = doc.merge()
     if spec is not None and spec.type != "None" and info.merge_source_path:
         try:
@@ -560,7 +574,9 @@ async def preview_png(
         except RenderError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return FileResponse(image, media_type="image/png")
+    # Revalidated every time: the same address gives a new picture once
+    # a font is added.
+    return FileResponse(image, media_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/{doc_id}/print.pdf")
