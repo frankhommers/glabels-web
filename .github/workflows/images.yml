@@ -115,7 +115,7 @@ jobs:
           docker tag "$image" glabels-web/renderer:dev
           ./scripts/sync-vendor.sh glabels-web/renderer:dev
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
 
       - name: Backend tests
         working-directory: backend
