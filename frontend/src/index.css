@@ -313,11 +313,11 @@ legend { padding: 0 4px; color: var(--text-muted); }
   overflow: auto;
   background: #9a9a9a;
   display: flex;
-  justify-content: center;
-  align-items: center;
   padding: 26px;
 }
-.label-canvas { background: #fff; box-shadow: 0 1px 5px rgb(0 0 0 / 35%); }
+/* Its real size, never squeezed; auto margins centre it while it fits and
+   let it scroll in every direction once it is larger than the view. */
+.label-canvas { flex: none; margin: auto; background: #fff; box-shadow: 0 1px 5px rgb(0 0 0 / 35%); }
 .limitation-bar { list-style: none; margin: 0; padding: 6px 8px; display: grid; gap: 5px; background: var(--window); }
 .limitation-bar li { padding: 5px 8px; border-radius: 3px; font-size: 12px; }
 .limitation-bar li.warning { background: var(--warning-bg); border: 1px solid var(--warning-border); }

@@ -28,6 +28,7 @@ import { useDialogs } from './ui/dialogs'
 import { MenuBar, type Menu } from './ui/MenuBar'
 import { OpenOnPhoneDialog } from './components/OpenOnPhoneDialog'
 import { formatLength } from './editor/units'
+import { MAX_ZOOM, MIN_ZOOM } from './editor/CanvasViewport'
 
 const PAGES: {
   id: PageId
@@ -361,8 +362,8 @@ export default function App({
         { kind: 'action', label: t('menu.view.grid'), checked: session.showGrid, onSelect: () => session.setShowGrid(!session.showGrid) },
         { kind: 'action', label: t('menu.view.markup'), checked: session.showMarkup, onSelect: () => session.setShowMarkup(!session.showMarkup) },
         { kind: 'separator' },
-        { kind: 'action', label: t('menu.view.zoomIn'), onSelect: () => session.setZoom(Math.min(12, session.zoom * 1.25)) },
-        { kind: 'action', label: t('menu.view.zoomOut'), onSelect: () => session.setZoom(Math.max(0.25, session.zoom / 1.25)) },
+        { kind: 'action', label: t('menu.view.zoomIn'), onSelect: () => session.setZoom(Math.min(MAX_ZOOM, session.zoom * 1.25)) },
+        { kind: 'action', label: t('menu.view.zoomOut'), onSelect: () => session.setZoom(Math.max(MIN_ZOOM, session.zoom / 1.25)) },
         { kind: 'action', label: t('menu.view.actualSize'), onSelect: () => session.setZoom(1) },
         { kind: 'separator' },
         { kind: 'action', label: t('menu.view.openOnPhone'), onSelect: () => setDialog('open-on-phone') },

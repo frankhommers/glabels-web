@@ -1,4 +1,5 @@
 import type { DocumentObject } from '../api/types'
+import { CanvasViewport, MAX_ZOOM, MIN_ZOOM } from '../editor/CanvasViewport'
 import { LabelCanvas } from '../editor/LabelCanvas'
 import { ObjectEditor } from '../components/ObjectEditor'
 import { createObject } from '../editor/objects'
@@ -135,10 +136,10 @@ export function EditorPage({
           <Icon name="glabels-center" size={16} />
         </button>
         <span className="toolbar-separator" />
-        <button type="button" className="tool" title={t('editor.zoomOut')} onClick={() => session.setZoom(Math.max(0.25, zoom / 1.25))}>
+        <button type="button" className="tool" title={t('editor.zoomOut')} onClick={() => session.setZoom(Math.max(MIN_ZOOM, zoom / 1.25))}>
           <Icon name="glabels-zoom-out" size={16} />
         </button>
-        <button type="button" className="tool" title={t('editor.zoomIn')} onClick={() => session.setZoom(Math.min(12, zoom * 1.25))}>
+        <button type="button" className="tool" title={t('editor.zoomIn')} onClick={() => session.setZoom(Math.min(MAX_ZOOM, zoom * 1.25))}>
           <Icon name="glabels-zoom-in" size={16} />
         </button>
         <button type="button" className="tool" title={t('editor.actualSize')} onClick={() => session.setZoom(1)}>
@@ -166,7 +167,7 @@ export function EditorPage({
       ) : null}
 
       <div className="editor-split">
-        <div className="canvas-scroll">
+        <CanvasViewport zoom={zoom} onZoom={session.setZoom} resetKey={detail.id}>
           <LabelCanvas
             document={detail}
             objects={objects}
@@ -180,7 +181,7 @@ export function EditorPage({
             onObjectsPreview={session.history.replace}
             onObjectsCommit={session.commit}
           />
-        </div>
+        </CanvasViewport>
         <ObjectEditor
           objects={objects}
           selection={selection}

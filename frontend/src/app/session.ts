@@ -6,6 +6,7 @@ import { labelSize, rotateFor, type Orientation } from '../editor/label'
 import { useHistory } from '../editor/useHistory'
 import type { UnitId } from '../editor/units'
 import type { MessageKey, Translate, Vars } from '../i18n'
+import { MIN_ZOOM } from '../editor/CanvasViewport'
 
 /** A message in the status bar. We keep the key rather than the text, so
  *  the bar follows along when the language changes. */
@@ -37,7 +38,9 @@ export function fitZoom(widthPt: number, heightPt: number): number {
   const availableHeight = Math.max(240, window.innerHeight - 190)
   if (widthPt <= 0 || heightPt <= 0) return 2
   const factor = Math.min(availableWidth / widthPt, availableHeight / heightPt)
-  return Math.max(0.25, Math.min(12, factor))
+  // A tiny label is not blown up all the way on opening; zooming in further
+  // stays possible.
+  return Math.max(MIN_ZOOM, Math.min(12, factor))
 }
 
 /** All state of the open project, like MainWindow keeps it in the desktop app. */
