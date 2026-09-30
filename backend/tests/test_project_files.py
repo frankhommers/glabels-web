@@ -217,3 +217,39 @@ def test_merge_source_is_relative_to_the_document_file(client, folder):
     assert moved.json()["merge"]["src"] == "merges/addresses.csv"
     assert moved.json()["merge"]["available"] is True
     assert b'src="merges/addresses.csv"' in (folder / "Post.glabels").read_bytes()
+
+
+def test_the_file_holds_only_the_pictures_in_use(client, folder):
+    import struct
+    import zlib
+
+    def png(colour: bytes) -> bytes:
+        def chunk(tag: bytes, data: bytes) -> bytes:
+            return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+
+        header = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(b"\x00" + colour)) + chunk(b"IEND", b"")
+
+    folder.mkdir(parents=True, exist_ok=True)
+    doc = _new(client)
+    client.post(f"/api/documents/{doc['id']}/save-as", json={"path": "", "name": "Pictures"})
+    kept, dropped = (
+        client.post(f"/api/documents/{doc['id']}/images", files={"file": (f"{n}.png", png(c), "image/png")}).json()["name"]
+        for n, c in (("red", b"\xff\x00\x00"), ("blue", b"\x00\x00\xff"))
+    )
+    picture = {"type": "image", "x_pt": 5, "y_pt": 5, "w_pt": 20, "h_pt": 20, "src": kept}
+    file = folder / "Pictures.glabels"
+
+    # Only the picture an object refers to goes into the file, as upstream writes it.
+    _save(client, doc, picture)
+    assert kept.encode() in file.read_bytes() and dropped.encode() not in file.read_bytes()
+    assert client.get(f"/api/documents/{doc['id']}").json()["file_state"] == "linked"
+    assert dropped.encode() not in client.get(f"/api/documents/{doc['id']}/file").content
+
+    # Deleting the object takes the picture out of the file ...
+    _save(client, doc)
+    assert kept.encode() not in file.read_bytes()
+    # ... but undo still finds it: the revisions keep it.
+    restored = _save(client, doc, picture)
+    assert [o["embedded"] for o in restored["content"]["objects"]] == [True]
+    assert kept.encode() in file.read_bytes()

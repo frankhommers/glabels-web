@@ -146,6 +146,17 @@ def _file_state(app: AppState, doc_id: str) -> str:
     return "linked" if current == known else "conflict"
 
 
+def _file_bytes(app: AppState, doc_id: str) -> bytes:
+    """The current revision as it goes into a .glabels file: without the
+    pictures nothing refers to any more, as the desktop app writes it."""
+    raw = app.store.read_revision(doc_id)
+    try:
+        doc = Document.from_bytes(raw, max_uncompressed_bytes=app.settings.max_upload_bytes)
+    except XmlError:
+        return raw
+    return doc.to_bytes() if doc.prune_embedded_files() else raw
+
+
 def _write_through(app: AppState, doc_id: str, *, force: bool = False) -> None:
     """Write the current revision to the linked file.
 
@@ -158,7 +169,7 @@ def _write_through(app: AppState, doc_id: str, *, force: bool = False) -> None:
     if not force and _file_state(app, doc_id) == "conflict":
         log.warning("file %s was changed outside the app; not overwritten", path)
         return
-    raw = app.store.read_revision(doc_id)
+    raw = _file_bytes(app, doc_id)
     try:
         app.files.write_file(path, raw)
     except (FileAreaError, OSError) as exc:
@@ -357,7 +368,7 @@ def delete_document(doc_id: str, app: AppState = Depends(state)) -> Response:
 @router.get("/{doc_id}/file")
 def download_document(doc_id: str, app: AppState = Depends(state)) -> Response:
     info, _ = _load(app, doc_id)
-    raw = app.store.read_revision(doc_id)
+    raw = _file_bytes(app, doc_id)
     filename = (_SAFE_NAME.sub("_", info.name) or "document") + ".glabels"
     return Response(
         content=raw,
@@ -768,7 +779,7 @@ def export_to_file(
 ) -> DocumentInfo:
     """Write the document as .glabels into the shared folder."""
     info, _ = _load(app, doc_id)
-    raw = app.store.read_revision(doc_id)
+    raw = _file_bytes(app, doc_id)
 
     filename = (request.name or info.name or "document").strip()
     if not filename.lower().endswith(".glabels"):
@@ -819,7 +830,7 @@ def save_as(doc_id: str, request: SaveAsRequest, app: AppState = Depends(state))
             doc.set_merge(spec.type, src)
             app.store.save_revision(doc_id, doc.to_bytes(), object_ids=doc.object_ids())
 
-    raw = app.store.read_revision(doc_id)
+    raw = _file_bytes(app, doc_id)
     try:
         app.files.write_file(target, raw)
     except FileAreaError as exc:

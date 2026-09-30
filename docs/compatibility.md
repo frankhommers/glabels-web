@@ -37,7 +37,7 @@ file format `Glabels-document version="4.0"`.
 | `Object-ellipse` | yes | yes | yes | same |
 | `Object-line` | yes | yes | yes | `dx`/`dy`, line width and colour |
 | `Object-barcode` | yes | yes | yes | Backend and style are never changed silently |
-| `Object-image` | yes | yes | yes | Source and embedded data are kept. New pictures are embedded as upstream writes them: PNG as base64, SVG as CDATA. One from a merge field shows as a placeholder in the editor |
+| `Object-image` | yes | yes | yes | Source and embedded data are kept. New pictures are embedded as upstream writes them: PNG as base64, SVG as CDATA. Like upstream, the `.glabels` file holds only the pictures still in use; the revisions keep all, so undo works. One from a merge field shows as a placeholder in the editor |
 | unknown element | yes | no | unchanged | Shown as a locked object with a notice |
 
 Common to all objects: position, size, `lock_aspect_ratio`, the affine matrix

@@ -565,6 +565,22 @@ class Document:
             node.set("encoding", "base64")
             node.text = base64.b64encode(payload).decode("ascii")
 
+    def prune_embedded_files(self) -> int:
+        """Drop embedded files no image object refers to any more.
+
+        The desktop app writes only the pictures still in use. We keep them
+        in the revisions, so undoing a delete brings the picture back, and
+        prune when the label is written out as a file.
+        """
+        used = {node.get("src") for node in self._root.iter("Object-image") if node.get("src")}
+        removed = 0
+        for data_node in self._root.findall("Data"):
+            for node in data_node.findall("File"):
+                if node.get("name") not in used:
+                    data_node.remove(node)
+                    removed += 1
+        return removed
+
     def get_embedded_file(self, name: str) -> tuple[str, bytes] | None:
         for data_node in self._root.findall("Data"):
             for node in data_node.findall("File"):
