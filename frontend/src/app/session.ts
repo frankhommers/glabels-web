@@ -66,8 +66,8 @@ export function useSession(t: Translate) {
   const [savedFlash, setSavedFlash] = useState<Notice | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [printSettings, setPrintSettings] = useState<PrintSettings>(DEFAULT_PRINT_SETTINGS)
-  // Clipboard within this session; pasting objects from the system clipboard
-  // needs an exchange format of its own and comes later.
+  // Objects copied in this tab. Their text goes on the system clipboard too;
+  // pictures and text from other programs are pasted through the actions.
   const [clipboard, setClipboard] = useState<DocumentObject[]>([])
   const history = useHistory<DocumentObject[]>([])
 
@@ -221,6 +221,16 @@ export function useSession(t: Translate) {
     [history, markDirty],
   )
 
+  /** Add objects to what the label holds by now, and select them. */
+  const addObjects = useCallback(
+    (added: DocumentObject[]) => {
+      history.commitFrom((current) => [...current, ...added])
+      setSelection(added.map((object) => object.id).filter((id): id is string => Boolean(id)))
+      markDirty()
+    },
+    [history, markDirty],
+  )
+
   // Undo and redo change the document too, so they must be written as well.
   const undo = useCallback(() => {
     history.undo()
@@ -284,6 +294,7 @@ export function useSession(t: Translate) {
     setPrintSettings,
     clipboard,
     setClipboard,
+    addObjects,
     open,
     save,
     flush,

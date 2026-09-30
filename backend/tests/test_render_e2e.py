@@ -139,3 +139,31 @@ def test_uploaded_font_ends_up_in_the_pdf(client, templates_dir):
     pdf = client.get(f"/api/documents/{doc['id']}/print.pdf", params={"copies": 1})
     assert pdf.status_code == 200, pdf.text
     assert b"DejaVuSerif" in pdf.content
+
+
+def test_an_embedded_picture_is_printed(client):
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+
+    rows = b"".join(b"\x00" + b"\x00\x00\x00" * 8 for _ in range(8))
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+    doc = client.post("/api/documents", json={"name": "Picture", "brand": "Avery", "part": "5095"}).json()
+    picture = client.post(f"/api/documents/{doc['id']}/images", files={"file": ("black.png", png, "image/png")}).json()
+    content = client.get(f"/api/documents/{doc['id']}").json()["content"]
+    content["objects"] = [
+        {"type": "image", "x_pt": 20, "y_pt": 20, "w_pt": 60, "h_pt": 60, "src": picture["name"]}
+    ]
+    assert client.put(f"/api/documents/{doc['id']}", json={"content": content}).status_code == 200
+
+    pdf = client.get(f"/api/documents/{doc['id']}/print.pdf", params={"copies": 1})
+    assert pdf.status_code == 200, pdf.text
+    # The renderer found the picture in the document and drew it.
+    assert b"/Subtype /Image" in pdf.content or b"/Subtype/Image" in pdf.content

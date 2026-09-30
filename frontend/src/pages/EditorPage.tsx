@@ -79,8 +79,9 @@ export function EditorPage({
         <button
           type="button"
           className="tool"
-          title={t('editor.imageNotYet')}
-          disabled
+          title={t('editor.addPicture')}
+          disabled={readOnly}
+          onClick={actions.choosePicture}
         >
           <Icon name="glabels-image" size={16} />
         </button>
@@ -167,7 +168,12 @@ export function EditorPage({
       ) : null}
 
       <div className="editor-split">
-        <CanvasViewport zoom={zoom} onZoom={session.setZoom} resetKey={detail.id}>
+        <CanvasViewport
+          zoom={zoom}
+          onZoom={session.setZoom}
+          resetKey={detail.id}
+          onDropped={readOnly ? undefined : (incoming, at) => void actions.receive(incoming, at)}
+        >
           <LabelCanvas
             document={detail}
             objects={objects}

@@ -76,6 +76,7 @@ export const en = {
 
   'menu.objects': 'Objects',
   'menu.objects.create': 'Create {object}',
+  'menu.objects.createPicture': 'Create Image…',
   'menu.objects.raise': 'Bring forward',
   'menu.objects.lower': 'Send backward',
   'menu.objects.rotateLeft': 'Rotate left',
@@ -139,6 +140,9 @@ export const en = {
   'status.folderUpdated': 'Shared folder updated',
   'status.copied': { one: '{count} object copied', other: '{count} objects copied' },
   'status.cut': { one: '{count} object cut', other: '{count} objects cut' },
+  'status.addingPicture': 'Adding picture…',
+  'status.pictureAdded': 'Picture added',
+  'error.pictureUnreadable': '{name} cannot be read as a picture.',
   'status.changeProduct':
     'Changing the product of an existing project is not available yet; create a new project instead.',
 
@@ -168,8 +172,6 @@ export const en = {
   // -------------------------------------------------------------------- editor
   'editor.select': 'Select',
   'editor.create': 'Create {object}',
-  'editor.imageNotYet':
-    'Create image — not available yet; existing images are still preserved',
   'editor.cut': 'Cut (Ctrl+X)',
   'editor.copy': 'Copy (Ctrl+C)',
   'editor.paste': 'Paste (Ctrl+V)',
@@ -188,6 +190,7 @@ export const en = {
   'editor.centerOnLabel': 'Center on label',
   'editor.zoomOut': 'Zoom out',
   'editor.zoomIn': 'Zoom in',
+  'editor.addPicture': 'Picture… (or paste or drop one on the label)',
   'editor.actualSize': 'Actual size',
   'editor.zoomToFit': 'Zoom to fit',
 

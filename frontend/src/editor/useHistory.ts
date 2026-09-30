@@ -6,6 +6,10 @@ export function useHistory<T>(initial: T) {
   const past = useRef<T[]>([])
   const future = useRef<T[]>([])
   const [counter, setCounter] = useState(0)
+  // The latest state, for changes that finish later (after an upload, say)
+  // and must build on what is there by then.
+  const latest = useRef(present)
+  latest.current = present
 
   const commit = useCallback((next: T) => {
     past.current = [...past.current.slice(-99), present]
@@ -13,6 +17,17 @@ export function useHistory<T>(initial: T) {
     setPresent(next)
     setCounter((value) => value + 1)
   }, [present])
+
+  /** Like commit, but built from the state at that moment. */
+  const commitFrom = useCallback((change: (current: T) => T) => {
+    const current = latest.current
+    const next = change(current)
+    latest.current = next
+    past.current = [...past.current.slice(-99), current]
+    future.current = []
+    setPresent(next)
+    setCounter((value) => value + 1)
+  }, [])
 
   const replace = useCallback((next: T) => {
     setPresent(next)
@@ -59,6 +74,7 @@ export function useHistory<T>(initial: T) {
   return {
     present,
     commit,
+    commitFrom,
     replace,
     adopt,
     remap,

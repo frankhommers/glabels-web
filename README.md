@@ -15,8 +15,13 @@ project.
 - Creating user product definitions, deriving them from an existing product,
   editing and deleting them; stored as XML in the shared folder, and therefore
   interchangeable with the desktop app.
-- An editor with text, box, ellipse, line and barcode; selecting, dragging,
-  resizing, rotating, flipping, aligning, stacking order, cut/paste and undo.
+- An editor with text, box, ellipse, line, barcode and image; selecting,
+  dragging, resizing, rotating, flipping, aligning, stacking order, cut/paste
+  and undo.
+- Pasting or dropping onto the label: a picture (screenshot, photo, file)
+  becomes an image, an SVG drawing too, and text becomes a text object.
+  Pictures are embedded in the `.glabels` file like the desktop app does it:
+  PNG and SVG as they are, other formats converted to PNG in the browser.
 - Opening, editing, saving and exporting `.glabels` files in format 4.0,
   keeping unknown nodes, attributes and object types.
 - Saving like on the desktop: a project lives in a `.glabels` file in the
@@ -51,8 +56,8 @@ project.
 - Printers that do not accept PDF. Nothing is converted; such printers are
   refused with an explanation when adding them.
 - Automatic printer discovery (mDNS). The IPP address is entered by hand.
-- Creating image objects and editing variables. Existing values in opened
-  documents are kept unchanged.
+- Editing variables. Existing values in opened documents are kept
+  unchanged.
 
 ## Quick start (containers)
 

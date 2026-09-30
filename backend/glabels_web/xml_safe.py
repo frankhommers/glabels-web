@@ -9,6 +9,9 @@ from __future__ import annotations
 from lxml import etree
 
 _COMMON = dict(
+    # Keep CDATA sections: embedded SVG drawings are written that way, and a
+    # save should leave them as they were.
+    strip_cdata=False,
     resolve_entities=False,
     no_network=True,
     load_dtd=False,

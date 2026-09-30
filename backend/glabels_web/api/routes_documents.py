@@ -6,6 +6,7 @@ import hashlib
 import logging
 import posixpath
 import re
+import secrets
 from dataclasses import replace
 
 from anyio import to_thread
@@ -14,6 +15,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
+from lxml import etree
 from pydantic import BaseModel, Field
 
 from ..documents import Document
@@ -30,7 +32,7 @@ from ..files import FileAreaError
 from ..files.store import safe_name
 from ..printing import PrintingError, PrintingUnavailable
 from ..render import RenderError, RenderRequest
-from ..xml_safe import XmlError
+from ..xml_safe import XmlError, parse_bytes
 from .deps import AppState, state
 
 log = logging.getLogger(__name__)
@@ -552,6 +554,64 @@ def embedded_file(
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     return Response(content=payload, media_type=mimetype, headers=headers)
+
+
+class EmbeddedImageOut(BaseModel):
+    # The name an image object refers to with its src.
+    name: str
+    mimetype: str
+    size_bytes: int
+    revision: int
+
+
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _image_kind(payload: bytes) -> str | None:
+    """PNG or SVG, the two forms gLabels embeds; anything else is refused.
+    The browser turns other pictures (JPEG, a pasted bitmap) into PNG first."""
+    if payload.startswith(_PNG_MAGIC):
+        return "image/png"
+    try:
+        text = payload.decode("utf-8")
+        root = parse_bytes(payload).getroot()
+    except (UnicodeDecodeError, etree.XMLSyntaxError, ValueError):
+        return None
+    # The drawing is kept as text in a CDATA section, which cannot hold "]]>".
+    if etree.QName(root).localname != "svg" or "]]>" in text:
+        return None
+    return "image/svg+xml"
+
+
+@router.post("/{doc_id}/images", response_model=EmbeddedImageOut, status_code=201)
+async def add_image(
+    doc_id: str, file: UploadFile = File(...), app: AppState = Depends(state)
+) -> EmbeddedImageOut:
+    """Embed a picture in the document, for a new image object to show.
+
+    Like the desktop app, the picture goes into the file itself, so the label
+    keeps it wherever it is opened. The object is added by the editor with an
+    ordinary save, so undo works as for any other object.
+    """
+    limit = app.settings.max_upload_bytes // 2  # base64 makes it a third larger
+    payload = await file.read(limit + 1)
+    if len(payload) > limit:
+        raise HTTPException(status_code=413, detail="the picture is larger than allowed")
+    mimetype = _image_kind(payload)
+    if mimetype is None:
+        raise HTTPException(status_code=415, detail="only PNG and SVG pictures can be embedded")
+
+    info, doc = _load(app, doc_id)
+    taken = {item.name for item in doc.embedded_files()}
+    name = next(
+        candidate
+        for candidate in (f"%image_{secrets.randbelow(90000) + 10000}%" for _ in range(1000))
+        if candidate not in taken
+    )
+    doc.add_embedded_file(name, mimetype, payload)
+    info = app.store.save_revision(doc_id, doc.to_bytes(), object_ids=doc.object_ids())
+    _write_through(app, doc_id)
+    return EmbeddedImageOut(name=name, mimetype=mimetype, size_bytes=len(payload), revision=info.revision)
 
 
 @router.get("/{doc_id}/preview.png")

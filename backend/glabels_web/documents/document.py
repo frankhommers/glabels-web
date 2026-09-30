@@ -546,6 +546,9 @@ class Document:
             _write_color(node, "color", "color_field", obj.color)
 
     def add_embedded_file(self, name: str, mimetype: str, payload: bytes) -> None:
+        """Embed a file in the ``<Data>`` section, as the desktop app does:
+        a PNG as base64, an SVG as its own text in a CDATA section. Those are
+        the only two forms upstream reads back."""
         data_node = self._root.find("Data")
         if data_node is None:
             data_node = etree.SubElement(self._root, "Data")
@@ -555,8 +558,12 @@ class Document:
         node = etree.SubElement(data_node, "File")
         node.set("name", name)
         node.set("mimetype", mimetype)
-        node.set("encoding", "base64")
-        node.text = base64.b64encode(payload).decode("ascii")
+        if mimetype == "image/svg+xml":
+            node.set("encoding", "cdata")
+            node.text = etree.CDATA(payload.decode("utf-8"))
+        else:
+            node.set("encoding", "base64")
+            node.text = base64.b64encode(payload).decode("ascii")
 
     def get_embedded_file(self, name: str) -> tuple[str, bytes] | None:
         for data_node in self._root.findall("Data"):

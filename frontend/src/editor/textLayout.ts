@@ -94,6 +94,11 @@ function cssFont(family: string, bold: boolean, italic: boolean, size: number): 
   return `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${JSON.stringify(family)}, "DejaVu Sans", sans-serif`
 }
 
+/** The width of one line of text, as laid out on the label. */
+export function measureLine(family: string, bold: boolean, italic: boolean, size: number, text: string): number {
+  return measurer(cssFont(family, bold, italic, pixelSize(size)))(text)
+}
+
 function measurer(font: string): (text: string) => number {
   if (!measureContext) measureContext = document.createElement('canvas').getContext('2d')
   const context = measureContext

@@ -7,7 +7,8 @@
  *  back to the top left corner.
  */
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import type { Incoming, LabelPoint } from '../app/actions'
 
 export const MIN_ZOOM = 0.25
 export const MAX_ZOOM = 32
@@ -19,10 +20,13 @@ export function CanvasViewport({
   zoom,
   onZoom,
   resetKey,
+  onDropped,
   children,
 }: {
   zoom: number
   onZoom: (zoom: number) => void
+  /** Files or text dropped on the label, and where. */
+  onDropped?: (incoming: Incoming, at: LabelPoint) => void
   /** Changes when another document is opened: start again in the middle. */
   resetKey: string
   children: ReactNode
@@ -103,8 +107,59 @@ export function CanvasViewport({
     if (el && !anchor.current) anchor.current = anchorAt(el.clientWidth / 2, el.clientHeight / 2)
   })
 
+  // Dropping files or text on the label puts them where they land.
+  const [dropping, setDropping] = useState(false)
+  const accepts = (event: DragEvent) =>
+    Boolean(onDropped) && ['Files', 'text/plain'].some((type) => event.dataTransfer.types.includes(type))
+
+  const onDragOver = (event: DragEvent) => {
+    if (!accepts(event)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setDropping(true)
+  }
+
+  const onDrop = (event: DragEvent) => {
+    setDropping(false)
+    if (!accepts(event)) return
+    event.preventDefault()
+    const at = origin()
+    if (!at || !onDropped) return
+    const view = at.el.getBoundingClientRect()
+    onDropped(
+      { files: Array.from(event.dataTransfer.files), text: event.dataTransfer.getData('text/plain') },
+      {
+        x: (event.clientX - view.left + at.el.scrollLeft - at.left) / zoomRef.current,
+        y: (event.clientY - view.top + at.el.scrollTop - at.top) / zoomRef.current,
+      },
+    )
+  }
+
+  // A file dropped beside the label must not make the browser open it and
+  // leave the editor.
+  useEffect(() => {
+    const keep = (event: globalThis.DragEvent) => {
+      if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
+    }
+    window.addEventListener('dragover', keep)
+    window.addEventListener('drop', keep)
+    return () => {
+      window.removeEventListener('dragover', keep)
+      window.removeEventListener('drop', keep)
+    }
+  }, [])
+
   return (
-    <div className="canvas-scroll" ref={scrollRef} onScroll={onScroll}>
+    <div
+      className={dropping ? 'canvas-scroll dropping' : 'canvas-scroll'}
+      ref={scrollRef}
+      onScroll={onScroll}
+      onDragOver={onDragOver}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false)
+      }}
+      onDrop={onDrop}
+    >
       {children}
     </div>
   )

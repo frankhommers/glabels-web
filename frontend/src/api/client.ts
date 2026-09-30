@@ -36,7 +36,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      // JSON bodies are strings; a FormData upload sets its own multipart type.
+      ...(typeof init?.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
     },
   })
@@ -149,6 +150,17 @@ export const api = {
 
   previewImageUrl: (id: string, settings: PrintSettings, page: number, dpi: number, revision: number) =>
     `/api/documents/${id}/preview.png?${printQuery(settings)}&page=${page}&dpi=${dpi}&rev=${revision}`,
+
+  /** Embed a picture (PNG or SVG) in the document; an image object then
+   *  refers to it by the returned name. */
+  addImage: (id: string, blob: Blob, filename: string) => {
+    const form = new FormData()
+    form.append('file', blob, filename)
+    return request<{ name: string; mimetype: string; size_bytes: number; revision: number }>(
+      `/api/documents/${id}/images`,
+      { method: 'POST', body: form },
+    )
+  },
 
   /** An image embedded in the document, for drawing it in the editor. */
   embeddedFileUrl: (id: string, name: string) =>

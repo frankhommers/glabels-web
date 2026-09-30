@@ -2,7 +2,7 @@
  *  vertical page bar (Welcome/Edit/Properties/Merge/Variables/Print) with
  *  stacked pages, and a status bar. */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError } from './api/client'
 import type { Health, Template } from './api/types'
 import { createActions } from './app/actions'
@@ -225,6 +225,7 @@ export default function App({
     [detail, open, session],
   )
 
+  const pasteHandled = useRef(true)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
@@ -260,7 +261,16 @@ export default function App({
         }
         if (key === 'x') { event.preventDefault(); actions.cut(); return }
         if (key === 'c') { event.preventDefault(); actions.copy(); return }
-        if (key === 'v') { event.preventDefault(); actions.paste(); return }
+        if (key === 'v') {
+          // Left to the browser: only its paste event carries pictures from
+          // the system clipboard. Some browsers send none outside a text
+          // field; then we read the clipboard ourselves.
+          pasteHandled.current = false
+          window.setTimeout(() => {
+            if (!pasteHandled.current && page === 'editor') void actions.pasteFromSystem()
+          }, 150)
+          return
+        }
         if (key === 'd') { event.preventDefault(); actions.duplicate(); return }
         if (key === 'a') { event.preventDefault(); actions.selectAll(); return }
         return
@@ -290,9 +300,25 @@ export default function App({
         actions.nudge(delta[0], delta[1])
       }
     }
+    // Paste on the label: a picture, an SVG drawing, text, or copied objects.
+    const onPaste = (event: ClipboardEvent) => {
+      pasteHandled.current = true
+      const target = event.target as HTMLElement
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable) return
+      if (page !== 'editor' || !detail || !event.clipboardData) return
+      event.preventDefault()
+      void actions.receive({
+        files: Array.from(event.clipboardData.files),
+        text: event.clipboardData.getData('text/plain'),
+      })
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [saveOrAsk, detail, session.history, actions])
+    window.addEventListener('paste', onPaste)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('paste', onPaste)
+    }
+  }, [saveOrAsk, detail, session.history, actions, page])
 
   const menus: Menu[] = [
     {
@@ -343,7 +369,7 @@ export default function App({
         { kind: 'separator' },
         { kind: 'action', label: t('menu.edit.cut'), shortcut: 'Ctrl+X', disabled: !actions.hasSelection, onSelect: actions.cut },
         { kind: 'action', label: t('menu.edit.copy'), shortcut: 'Ctrl+C', disabled: !actions.hasSelection, onSelect: actions.copy },
-        { kind: 'action', label: t('menu.edit.paste'), shortcut: 'Ctrl+V', disabled: !actions.hasClipboard, onSelect: actions.paste },
+        { kind: 'action', label: t('menu.edit.paste'), shortcut: 'Ctrl+V', disabled: !detail, onSelect: () => void actions.pasteFromSystem() },
         { kind: 'action', label: t('menu.edit.delete'), shortcut: 'Delete', disabled: !actions.hasSelection, onSelect: actions.remove },
         { kind: 'action', label: t('menu.edit.duplicate'), shortcut: 'Ctrl+D', disabled: !actions.hasSelection, onSelect: actions.duplicate },
         { kind: 'separator' },
@@ -378,6 +404,12 @@ export default function App({
           disabled: !detail,
           onSelect: () => addObject(session, tool.type),
         })),
+        {
+          kind: 'action',
+          label: t('menu.objects.createPicture'),
+          disabled: !detail,
+          onSelect: actions.choosePicture,
+        },
         { kind: 'separator' },
         { kind: 'action', label: t('menu.objects.raise'), disabled: !actions.hasSelection, onSelect: actions.raise },
         { kind: 'action', label: t('menu.objects.lower'), disabled: !actions.hasSelection, onSelect: actions.lower },

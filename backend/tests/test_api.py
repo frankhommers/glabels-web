@@ -234,3 +234,66 @@ def test_the_list_says_which_designs_are_turned(client):
     ).json()
     listed = {item["id"]: item["rotate"] for item in client.get("/api/documents").json()}
     assert listed == {upright["id"]: False, turned["id"]: True}
+
+
+def _png(width: int = 3, height: int = 2) -> bytes:
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+
+    rows = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+
+
+def test_pictures_are_embedded_the_way_glabels_reads_them(client):
+    doc = client.post("/api/documents", json={"name": "p", "brand": "Avery", "part": "5095"}).json()
+    png = _png()
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>'
+
+    added = client.post(f"/api/documents/{doc['id']}/images", files={"file": ("red.png", png, "image/png")})
+    assert added.status_code == 201, added.text
+    picture = added.json()
+    assert picture["mimetype"] == "image/png"
+    assert picture["name"].startswith("%image_") and picture["name"].endswith("%")
+    drawing = client.post(
+        f"/api/documents/{doc['id']}/images", files={"file": ("d.svg", svg, "image/svg+xml")}
+    ).json()
+    assert drawing["mimetype"] == "image/svg+xml"
+    assert drawing["name"] != picture["name"]
+
+    # The editor then adds the objects with an ordinary save.
+    content = client.get(f"/api/documents/{doc['id']}").json()["content"]
+    for name in (picture["name"], drawing["name"]):
+        content["objects"].append(
+            {"type": "image", "x_pt": 10, "y_pt": 10, "w_pt": 30, "h_pt": 20, "lock_aspect_ratio": True, "src": name}
+        )
+    saved = client.put(f"/api/documents/{doc['id']}", json={"content": content}).json()
+    images = [o for o in saved["content"]["objects"] if o["type"] == "image"]
+    assert [o["embedded"] for o in images] == [True, True]
+    assert not any(limit["code"] == "image-source-external" for limit in saved["limitations"])
+
+    export = client.get(f"/api/documents/{doc['id']}/file").content
+    # Upstream reads a PNG as base64 and an SVG as text, and nothing else.
+    assert f'name="{picture["name"]}" mimetype="image/png" encoding="base64"'.encode() in export
+    assert f'name="{drawing["name"]}" mimetype="image/svg+xml" encoding="cdata"'.encode() in export
+    assert b"<![CDATA[<svg" in export
+    shown = client.get(f"/api/documents/{doc['id']}/embedded", params={"name": picture["name"]})
+    assert shown.content == png
+
+
+@pytest.mark.parametrize(
+    ("filename", "payload"),
+    [
+        ("photo.jpg", b"\xff\xd8\xff\xe0" + b"\x00" * 40),  # the browser converts these first
+        ("page.xml", b"<html><body/></html>"),
+        ("broken.svg", b'<svg xmlns="http://www.w3.org/2000/svg"><text>]]></text></svg>'),
+        ("notes.txt", b"just text"),
+    ],
+)
+def test_only_png_and_svg_are_embedded(client, filename, payload):
+    doc = client.post("/api/documents", json={"name": "p", "brand": "Avery", "part": "5095"}).json()
+    response = client.post(f"/api/documents/{doc['id']}/images", files={"file": (filename, payload, "application/octet-stream")})
+    assert response.status_code == 415

@@ -73,6 +73,7 @@ export const nl: Messages = {
   'menu.view.actualSize': 'Werkelijke grootte',
 
   'menu.objects': 'Objecten',
+  'menu.objects.createPicture': 'Afbeelding maken…',
   'menu.objects.create': '{object} maken',
   'menu.objects.raise': 'Naar voren',
   'menu.objects.lower': 'Naar achteren',
@@ -137,6 +138,9 @@ export const nl: Messages = {
   'status.folderUpdated': 'Gedeelde map bijgewerkt',
   'status.copied': { one: '{count} object gekopieerd', other: '{count} objecten gekopieerd' },
   'status.cut': { one: '{count} object geknipt', other: '{count} objecten geknipt' },
+  'status.addingPicture': 'Afbeelding toevoegen…',
+  'status.pictureAdded': 'Afbeelding toegevoegd',
+  'error.pictureUnreadable': '{name} is niet als afbeelding te lezen.',
   'status.changeProduct':
     'Van product wisselen binnen een bestaand project is nog niet beschikbaar; maak een nieuw project aan.',
 
@@ -165,8 +169,6 @@ export const nl: Messages = {
   // -------------------------------------------------------------------- editor
   'editor.select': 'Selecteren',
   'editor.create': '{object} maken',
-  'editor.imageNotYet':
-    'Afbeelding maken — nog niet beschikbaar; bestaande afbeeldingen blijven wel behouden',
   'editor.cut': 'Knippen (Ctrl+X)',
   'editor.copy': 'Kopiëren (Ctrl+C)',
   'editor.paste': 'Plakken (Ctrl+V)',
@@ -185,6 +187,7 @@ export const nl: Messages = {
   'editor.centerOnLabel': 'Centreren op het label',
   'editor.zoomOut': 'Uitzoomen',
   'editor.zoomIn': 'Inzoomen',
+  'editor.addPicture': 'Afbeelding… (of plak of sleep er een op het label)',
   'editor.actualSize': 'Werkelijke grootte',
   'editor.zoomToFit': 'Passend maken',
 
