@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from ..documents import Document
 from ..documents import merge as merge_backends
+from ..documents import merge_list as merge_lists
 from ..documents.models import (
     DocumentContent,
     DocumentDetail,
@@ -388,6 +389,9 @@ class PrintSettings(BaseModel):
     reverse: bool = False
     collate: bool = False
     group_per_page: bool = False
+    # Only the rows of the label's list still to print, each as often as its
+    # copies say (see merge_list).
+    pending_only: bool = False
 
     def key(self) -> str:
         return "|".join(
@@ -401,6 +405,7 @@ class PrintSettings(BaseModel):
                 self.reverse,
                 self.collate,
                 self.group_per_page,
+                self.pending_only,
             )
         )
 
@@ -443,6 +448,41 @@ def _pdf_page_size(path: Path) -> tuple[float, float]:
 
 
 async def _ensure_pdf(app: AppState, doc_id: str, settings: PrintSettings) -> tuple[DocumentInfo, Path]:
+    info, pdf, _rows = await _render(app, doc_id, settings)
+    return info, pdf
+
+
+def _pending_source(app: AppState, doc_id: str, info: DocumentInfo, doc: Document) -> tuple[Path, str, list[str]]:
+    """A merge source with only the list rows still to print, for the renderer."""
+    spec = doc.merge()
+    if spec is None or spec.type == "None" or not info.merge_source_path:
+        raise HTTPException(status_code=409, detail="nothing-to-print")
+    try:
+        raw = app.files.read(info.merge_source_path, max_bytes=app.settings.max_upload_bytes)
+        merge_list = merge_lists.parse(raw, spec.type)
+    except FileAreaError as exc:
+        raise HTTPException(status_code=422, detail=f"the merge source is not available: {exc}") from exc
+    except merge_backends.MergeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    busy = {row for record in app.store.unfinished_list_prints(doc_id) for row in record.list_rows}
+    rows = merge_lists.pending(merge_list, busy)
+    if not rows:
+        raise HTTPException(status_code=409, detail="nothing-to-print")
+    data = merge_lists.printable(merge_list, rows, spec.type)
+    digest = _sha(data)[:16]
+    folder = app.store.render_path(doc_id, info.revision, "list").parent / f"list-{digest}"
+    folder.mkdir(parents=True, exist_ok=True)
+    source = folder / posixpath.basename(info.merge_source_path)
+    if not source.exists():
+        source.write_bytes(data)
+    return source, digest, [row.id for row in rows]
+
+
+async def _render(
+    app: AppState, doc_id: str, settings: PrintSettings
+) -> tuple[DocumentInfo, Path, list[str]]:
+    """The PDF for these settings, and the list rows it holds (if printing
+    only the rows still to print)."""
     info, doc = _load(app, doc_id)
     try:
         doc.validate_for_render()
@@ -461,7 +501,11 @@ async def _ensure_pdf(app: AppState, doc_id: str, settings: PrintSettings) -> tu
     app.fonts.refresh_if_changed()
     cache_key = f"{cache_key}|fonts:{app.fonts.stamp}"
     spec = doc.merge()
-    if spec is not None and spec.type != "None" and info.merge_source_path:
+    list_rows: list[str] = []
+    if settings.pending_only:
+        merge_source, digest, list_rows = _pending_source(app, doc_id, info, doc)
+        cache_key = f"{cache_key}|list:{digest}"
+    elif spec is not None and spec.type != "None" and info.merge_source_path:
         try:
             entry = app.files.entry(info.merge_source_path)
             merge_source = app.files.resolve(info.merge_source_path)
@@ -483,7 +527,7 @@ async def _ensure_pdf(app: AppState, doc_id: str, settings: PrintSettings) -> tu
         except RenderError as exc:
             log.warning("rendering failed for %s: %s (%s)", doc_id, exc, exc.stderr.strip()[-500:])
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return info, output
+    return info, output, list_rows
 
 
 def _settings_from_query(
@@ -495,6 +539,7 @@ def _settings_from_query(
     reverse: bool,
     collate: bool = False,
     group_per_page: bool = False,
+    pending_only: bool = False,
 ) -> PrintSettings:
     return PrintSettings(
         sheets=sheets,
@@ -505,6 +550,7 @@ def _settings_from_query(
         reverse=reverse,
         collate=collate,
         group_per_page=group_per_page,
+        pending_only=pending_only,
     )
 
 
@@ -519,11 +565,12 @@ async def preview_info(
     reverse: bool = False,
     collate: bool = False,
     group_per_page: bool = False,
+    pending_only: bool = False,
     app: AppState = Depends(state),
 ) -> PreviewInfo:
     """How many pages does this print make, and how large is a page?"""
     settings = _settings_from_query(
-        sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page
+        sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page, pending_only
     )
     info, pdf = await _ensure_pdf(app, doc_id, settings)
     width, height = _pdf_page_size(pdf)
@@ -638,11 +685,12 @@ async def preview_png(
     reverse: bool = False,
     collate: bool = False,
     group_per_page: bool = False,
+    pending_only: bool = False,
     app: AppState = Depends(state),
 ) -> FileResponse:
     """Page preview: a rasterisation of exactly the PDF that gets printed."""
     settings = _settings_from_query(
-        sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page
+        sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page, pending_only
     )
     info, pdf = await _ensure_pdf(app, doc_id, settings)
 
@@ -669,6 +717,7 @@ async def print_pdf(
     reverse: bool = False,
     collate: bool = False,
     group_per_page: bool = False,
+    pending_only: bool = False,
     app: AppState = Depends(state),
 ) -> FileResponse:
     """The print as a PDF, to keep or to send yourself.
@@ -677,7 +726,7 @@ async def print_pdf(
     and the evidence, not the regular print path.
     """
     settings = _settings_from_query(
-        sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page
+        sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page, pending_only
     )
     info, pdf = await _ensure_pdf(app, doc_id, settings)
     filename = (_SAFE_NAME.sub("_", info.name) or "document") + ".pdf"
@@ -907,8 +956,9 @@ def merge_preview(doc_id: str, app: AppState = Depends(state)) -> MergePreviewOu
     except merge_backends.MergeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    out.keys = preview.keys
-    out.records = preview.records
+    # The list's own columns (see merge_list) are not fields for a label.
+    out.keys = [key for key in preview.keys if key not in merge_lists.META]
+    out.records = [{k: v for k, v in record.items() if k not in merge_lists.META} for record in preview.records]
     out.record_count = preview.record_count
     out.truncated = preview.truncated
     return out
@@ -988,7 +1038,7 @@ async def print_document(
     except PrintingError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    info, pdf = await _ensure_pdf(app, doc_id, request.settings)
+    info, pdf, list_rows = await _render(app, doc_id, request.settings)
     title = f"{info.name} (revision {info.revision})"
 
     def work():
@@ -1004,7 +1054,7 @@ async def print_document(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     app.store.record_print_request(
-        request.request_id, doc_id, printer.name, printer.uri, job.job_id, title
+        request.request_id, doc_id, printer.name, printer.uri, job.job_id, title, list_rows=list_rows
     )
     app.store.prune_print_requests()
     log.info("job %s to %s (%s revision %s)", job.job_id, printer.name, info.name, info.revision)

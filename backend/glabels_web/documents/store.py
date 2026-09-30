@@ -53,7 +53,10 @@ CREATE TABLE IF NOT EXISTS print_requests (
     -- Final state once the printer reports it (completed, canceled,
     -- aborted). After that we no longer need to ask the printer.
     final_state_code INTEGER NOT NULL DEFAULT 0,
-    final_reasons    TEXT NOT NULL DEFAULT ''
+    final_reasons    TEXT NOT NULL DEFAULT '',
+    -- The rows of the label's list this job prints, as a JSON array of row
+    -- ids; they are marked printed once the job has completed.
+    list_rows        TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -79,6 +82,7 @@ class PrintRecord:
     created_at: str
     final_state_code: int = 0
     final_reasons: str = ""
+    list_rows: tuple[str, ...] = ()
 
     @property
     def finished(self) -> bool:
@@ -96,6 +100,7 @@ def _print_record(row: sqlite3.Row) -> PrintRecord:
         created_at=row["created_at"],
         final_state_code=row["final_state_code"],
         final_reasons=row["final_reasons"],
+        list_rows=tuple(json.loads(row["list_rows"] or "[]")),
     )
 
 
@@ -125,7 +130,7 @@ class DocumentStore:
                         f"ALTER TABLE documents ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
                     )
             job_columns = {row["name"] for row in conn.execute("PRAGMA table_info(print_requests)")}
-            for column in ("printer_uri", "title", "final_reasons"):
+            for column in ("printer_uri", "title", "final_reasons", "list_rows"):
                 if column not in job_columns:
                     conn.execute(
                         f"ALTER TABLE print_requests ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
@@ -326,14 +331,33 @@ class DocumentStore:
         printer_uri: str,
         job_id: int,
         title: str,
+        list_rows: list[str] | None = None,
     ) -> None:
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO print_requests "
-                "(request_id, document_id, printer, printer_uri, title, job_id, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (request_id, doc_id, printer, printer_uri, title, job_id, _now()),
+                "(request_id, document_id, printer, printer_uri, title, job_id, created_at, list_rows) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    request_id, doc_id, printer, printer_uri, title, job_id, _now(),
+                    json.dumps(list_rows) if list_rows else "",
+                ),
             )
+
+    def unfinished_list_prints(self, doc_id: str | None = None, *, within_minutes: int = 60) -> list[PrintRecord]:
+        """Jobs printing rows of a list that have not finished yet. Their rows
+        are not printed again meanwhile; after an hour we stop waiting."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=within_minutes)).isoformat(timespec="seconds")
+        query = (
+            "SELECT * FROM print_requests WHERE list_rows != '' AND final_state_code = 0 "
+            "AND created_at >= ?"
+        )
+        params: list[str] = [cutoff]
+        if doc_id is not None:
+            query += " AND document_id = ?"
+            params.append(doc_id)
+        with self._connect() as conn:
+            return [_print_record(row) for row in conn.execute(query, params).fetchall()]
 
     def recent_print_requests(self, limit: int = 20, offset: int = 0) -> list[PrintRecord]:
         with self._connect() as conn:

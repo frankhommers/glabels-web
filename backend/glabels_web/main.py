@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from .api import (
     routes_documents,
     routes_files,
     routes_fonts,
+    routes_lists,
     routes_preferences,
     routes_printers,
     routes_templates,
@@ -61,7 +63,11 @@ def _upstream_commit(settings) -> str | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.app_state = AppState.create()
+    # Rows of a list are marked printed when their job completes, also when
+    # no screen is open to ask for the job's state.
+    watcher = asyncio.create_task(routes_printers.watch_list_prints(app.state.app_state))
     yield
+    watcher.cancel()
 
 
 def create_app() -> FastAPI:
@@ -88,6 +94,7 @@ def create_app() -> FastAPI:
 
     app.include_router(routes_templates.router)
     app.include_router(routes_documents.router)
+    app.include_router(routes_lists.router)
     app.include_router(routes_fonts.router)
     app.include_router(routes_files.router)
     app.include_router(routes_printers.router)

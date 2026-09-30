@@ -127,6 +127,7 @@
 .mobile-field { display: flex; flex-direction: column; gap: 6px; }
 .mobile-field > span { font-size: 14px; color: var(--text-muted); }
 .mobile-field textarea,
+.mobile-field input,
 .mobile-field select {
   width: 100%;
   padding: 10px 12px;
@@ -189,3 +190,49 @@
 .mobile-status.done { color: #2e7d32; }
 .mobile-status.failed { color: #b3261e; }
 
+
+/* ------------------------------------------------------------------ list */
+.mobile-list-form,
+.mobile-rows { display: flex; flex-direction: column; gap: 10px; }
+.mobile-list-form h2,
+.mobile-rows h2 { margin: 4px 0 0; font-size: 16px; font-weight: 600; }
+.mobile-add {
+  min-height: 44px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--highlight);
+  background: var(--base);
+  border: 1px solid var(--highlight);
+  border-radius: 8px;
+}
+.mobile-rows ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mobile-rows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 4px 4px 12px;
+  background: var(--base);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+.mobile-rows.printed li { color: var(--text-muted); }
+.mobile-row-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mobile-row-badge {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--window-alt);
+  border-radius: 10px;
+}
+.mobile-row-button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+}
+.mobile-rows .mobile-link { align-self: flex-start; padding-left: 0; }

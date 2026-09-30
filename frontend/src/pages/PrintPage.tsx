@@ -7,7 +7,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
+import { lists, type LabelList } from '../api/lists'
 import { newRequestId, printerState, printers as printerApi, type PrintJob, type PrinterList } from '../api/printers'
 import type { MessageKey, Translate } from '../i18n'
 import { useDialogs } from '../ui/dialogs'
@@ -60,6 +61,12 @@ export function PrintPage({ session, template }: { session: Session; template: T
   const [jobs, setJobs] = useState<PrintJob[]>([])
   const [printing, setPrinting] = useState(false)
   const [printMessage, setPrintMessage] = useState<string | null>(null)
+  // The label's list, if it has one: then printing only what is still to
+  // print is a choice.
+  const [list, setList] = useState<LabelList | null>(null)
+  const pendingOnly = Boolean(printSettings.pending_only)
+  // Changes whenever the rows still to print change, so the preview follows.
+  const listStamp = pendingOnly && list ? list.rows.filter((row) => !row.printed).map((row) => `${row.id}:${row.copies}`).join(',') : ''
 
   const loadPrinters = useCallback(async () => {
     try {
@@ -143,11 +150,24 @@ export function PrintPage({ session, template }: { session: Session; template: T
       setPage((current) => Math.min(current, result.pages))
     } catch (error) {
       setInfo(null)
-      setProblem(String(error))
+      setProblem(
+        error instanceof ApiError && error.message === 'nothing-to-print' ? t('list.nothingToPrint') : String(error),
+      )
     } finally {
       setBusy(false)
     }
-  }, [detail, printSettings, session])
+    // listStamp: a new preview when the rows still to print change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, printSettings, session, listStamp])
+
+  useEffect(() => {
+    if (!detail) return
+    lists
+      .get(detail.id)
+      .then(setList)
+      .catch(() => setList(null))
+    // Again whenever the job list changes: a completed job marks rows printed.
+  }, [detail, jobs])
 
   useEffect(() => {
     void reload()
@@ -234,6 +254,18 @@ export function PrintPage({ session, template }: { session: Session; template: T
             <p className="form-static">
               {t('print.source', { source: detail.merge?.source_path ?? detail.merge?.src ?? '' })}
             </p>
+            {list?.available && list.rows.length > 0 ? (
+              <label className="check wide">
+                <input
+                  type="checkbox"
+                  checked={pendingOnly}
+                  onChange={(event) =>
+                    update(event.target.checked ? { pending_only: true, copies: 1, sheets: null } : { pending_only: false })
+                  }
+                />
+                {t('print.pendingOnly', { count: list.pending_labels })}
+              </label>
+            ) : null}
             <div className="form-row">
               <label>{t('print.copies')}</label>
               <input
@@ -458,7 +490,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
           {info ? (
             <img
               className={landscape ? 'preview-sheet landscape' : 'preview-sheet'}
-              src={api.previewImageUrl(detail.id, printSettings, page, 110, detail.revision)}
+              src={`${api.previewImageUrl(detail.id, printSettings, page, 110, detail.revision)}${listStamp ? `&list=${encodeURIComponent(listStamp)}` : ''}`}
               alt={t('print.page', { number: page, total: info?.pages ?? '–' })}
             />
           ) : (

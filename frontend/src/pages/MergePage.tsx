@@ -1,8 +1,9 @@
 /** Merge: choose the source type and file, and check the data.
  *
- *  The document stores only a bare file name in `<Merge src="...">`;
- *  upstream looks for it next to the document file. Where the file lives here
- *  is application data and stays out of the .glabels file.
+ *  The document refers to the source relative to its own folder, as the
+ *  desktop app does. A source with field names on line 1 is also the label's
+ *  list: rows can be added and edited here or on a phone, and printed when
+ *  you like (see ListTable).
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -11,6 +12,8 @@ import type { MergePreview } from '../api/types'
 import type { Session } from '../app/session'
 import type { MessageKey } from '../i18n'
 import { FileDialog } from '../components/FileDialog'
+import { ListTable } from '../components/ListTable'
+import { lists, type LabelList } from '../api/lists'
 
 const MERGE_TYPES: { id: string; label: MessageKey }[] = [
   { id: 'None', label: 'merge.type.none' },
@@ -31,6 +34,7 @@ export function MergePage({ session }: { session: Session }) {
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const [list, setList] = useState<LabelList | null>(null)
 
   const mergeType = detail?.merge?.type ?? 'None'
   const sourcePath = detail?.merge?.source_path ?? null
@@ -39,12 +43,21 @@ export function MergePage({ session }: { session: Session }) {
     if (!detail) return
     try {
       setPreview(await api.mergePreview(detail.id))
+      setList(await lists.get(detail.id).catch(() => null))
       setProblem(null)
     } catch (error) {
       setPreview(null)
       setProblem(String(error instanceof Error ? error.message : error))
     }
   }, [detail])
+
+  const listChanged = async (next: LabelList) => {
+    setList(next)
+    // The first row made the list's file and linked it: show that.
+    if (detail && next.source_path && next.source_path !== detail.merge?.source_path) {
+      session.setDetail(await api.getDocument(detail.id))
+    }
+  }
 
   useEffect(() => {
     void reload()
@@ -118,7 +131,17 @@ export function MergePage({ session }: { session: Session }) {
         {problem ? <p className="inline-warning">{problem}</p> : null}
       </fieldset>
 
-      {preview && preview.keys.length > 0 ? (
+      {list?.available && list.fields.length > 0 ? (
+        <fieldset>
+          <legend>{t('merge.list')}</legend>
+          <p className="muted">
+            {list.source_path ? t('merge.listHint') : t('merge.listNew', { fields: list.fields.join(', ') })}
+          </p>
+          <ListTable docId={detail.id} list={list} onChange={(next) => void listChanged(next)} onProblem={setProblem} />
+        </fieldset>
+      ) : null}
+
+      {preview && preview.keys.length > 0 && !(list?.available && list.fields.length > 0) ? (
         <>
           <fieldset>
             <legend>{t('merge.fields')}</legend>

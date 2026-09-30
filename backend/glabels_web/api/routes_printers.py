@@ -6,6 +6,8 @@ the printer. No print service sits in between.
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 
 from anyio import to_thread
@@ -15,6 +17,7 @@ from pydantic import BaseModel, Field
 from ..printing import Printer, PrintingError, PrintingUnavailable
 from ..printing.ipp_client import JOB_STATE_NAMES, UNKNOWN_STATE
 from .deps import AppState, state
+from .routes_lists import rows_printed
 
 log = logging.getLogger(__name__)
 
@@ -297,7 +300,7 @@ async def list_jobs(
                 continue
             reasons = ", ".join(status.reasons)
             if status.finished:
-                app.store.finish_print_request(record.request_id, status.state_code, reasons)
+                _finish(app, record, status.state_code, reasons)
             result.append(
                 out.model_copy(
                     update={
@@ -337,3 +340,36 @@ async def cancel_job(request_id: str, app: AppState = Depends(state)) -> Respons
     except PrintingError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+JOB_COMPLETED = 9
+
+
+def _finish(app: AppState, record, state_code: int, reasons: str) -> None:
+    """Record a job's final state; a completed list job marks its rows printed."""
+    app.store.finish_print_request(record.request_id, state_code, reasons)
+    if record.list_rows and state_code == JOB_COMPLETED:
+        rows_printed(app, record.document_id, record.list_rows)
+
+
+def settle_list_prints(app: AppState) -> None:
+    """Ask the printer about list jobs that have not finished yet."""
+    for record in app.store.unfinished_list_prints():
+        if not record.printer_uri:
+            continue
+        try:
+            status = app.printers.job_status(record.printer_uri, record.job_id)
+        except PrintingError:
+            continue
+        if status.finished:
+            _finish(app, record, status.state_code, ", ".join(status.reasons))
+
+
+async def watch_list_prints(app: AppState, every_seconds: float = 15) -> None:
+    """Keep settling list jobs in the background."""
+    while True:
+        await asyncio.sleep(every_seconds)
+        try:
+            await to_thread.run_sync(settle_list_prints, app)
+        except Exception:  # noqa: BLE001 - a hiccup must not stop the watcher
+            log.exception("checking list print jobs failed")

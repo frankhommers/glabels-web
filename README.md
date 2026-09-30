@@ -39,6 +39,8 @@ project.
   saving `.glabels` files, and managing fonts.
 - Merging with CSV and tab separated files, including a field overview, a data
   preview and the merge controls when printing.
+- Lists: rows added from the desktop or a phone and printed together later,
+  only what is still to print. See *Lists* below.
 - Printer management over IPP: adding a printer after checking with the
   device, choosing the default printer, printing, following and cancelling
   jobs. The PDF goes straight to the printer; no print service runs. The
@@ -165,6 +167,28 @@ deliberate — access belongs to the reverse proxy in front of it, which is
 where HTTPS, authentication (basic auth, OIDC, an identity-aware proxy) and
 IP restrictions live. Bind the container to localhost and let only the proxy
 reach it, as the compose file does.
+
+## Lists
+
+A label with fields (`${name}`, `${title}`) has a list: rows you add when it
+suits you, from the Merge page or from a phone, and print together later.
+
+- On a phone, such a label shows a form with one field per `${…}` and a
+  number of copies. **Add** puts the row on the list and empties the form for
+  the next one. The list below shows what is still to print; other devices
+  adding to the same list appear by themselves.
+- **Print N labels** prints only the rows still to print, each as often as
+  its copies say. On the desktop that is **Only what is still to print** on
+  the Print page.
+- A row is marked printed once the printer reports the job completed, also
+  when no screen is open. Printed rows stay, to print again or clear away;
+  a row on its way to the printer is not printed twice.
+
+The list is the label's merge source, an ordinary text file with field names
+on line 1; a label with fields but no source gets `merges/<label>.tsv` with
+its first row. Three columns are added at the end: `_id`, `_copies` and
+`_printed`. A label does not use them, so gLabels on a desktop can still open
+and print the file (all rows, once each).
 
 ## On a phone
 

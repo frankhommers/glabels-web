@@ -20,6 +20,7 @@ function printQuery(settings: PrintSettings): string {
   if (settings.reverse) query.set('reverse', 'true')
   if (settings.collate) query.set('collate', 'true')
   if (settings.group_per_page) query.set('group_per_page', 'true')
+  if (settings.pending_only) query.set('pending_only', 'true')
   return query.toString()
 }
 

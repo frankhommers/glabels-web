@@ -19,6 +19,8 @@ import { applyFonts, fetchFonts } from '../app/fonts'
 import { DEFAULT_PRINT_SETTINGS } from '../app/session'
 import { useT } from '../i18n'
 import './mobile.css'
+import { lists, type LabelList } from '../api/lists'
+import { ListPanel } from './ListPanel'
 import { useUprightSrc } from './upright'
 import { MOBILE_BASE, openFullEditor } from './view'
 
@@ -137,6 +139,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [printState, setPrintState] = useState<PrintState>({ phase: 'idle' })
+  // A label with ${fields} shows its list: rows to add, then print together.
+  const [list, setList] = useState<LabelList | null>(null)
+  const listMode = Boolean(list?.available && list.fields.length > 0)
 
   // Typing saves after a short pause; printing waits for that save.
   const dirty = useRef(false)
@@ -172,6 +177,25 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       })
       .catch(() => setPrinterList([]))
   }, [id])
+
+  // The list, kept up to date: other devices add rows too, and a job that
+  // completes marks its rows printed.
+  useEffect(() => {
+    let stopped = false
+    const load = () =>
+      lists
+        .get(id)
+        .then((loaded) => {
+          if (!stopped) setList(loaded)
+        })
+        .catch(() => undefined)
+    void load()
+    const interval = window.setInterval(load, 5000)
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+    }
+  }, [id, printState.phase])
 
   const save = useCallback(async () => {
     const { detail: current, texts: values } = latest.current
@@ -224,9 +248,12 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       await printerApi.print(
         detail.id,
         printer,
-        { ...DEFAULT_PRINT_SETTINGS, copies, sheets: null, first: 1 },
+        listMode
+          ? { ...DEFAULT_PRINT_SETTINGS, copies: 1, sheets: null, first: 1, pending_only: true }
+          : { ...DEFAULT_PRINT_SETTINGS, copies, sheets: null, first: 1 },
         requestId,
       )
+      if (listMode) setList(await lists.get(detail.id))
       setPrintState({ phase: 'waiting', requestId, printer })
     } catch (error) {
       setPrintState({ phase: 'failed', reason: String(error instanceof Error ? error.message : error) })
@@ -261,10 +288,15 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     }
   }, [printState])
 
-  const preview = useUprightSrc(
-    detail ? api.previewImageUrl(detail.id, PREVIEW_SETTINGS, 1, 150, detail.revision) : '',
-    detail?.content.rotate ?? false,
-  )
+  // With a list: the first label still to print; the address changes with
+  // the list, so the picture follows it.
+  const listPreview = listMode && list && list.pending_rows > 0
+  const previewUrl = detail
+    ? listPreview
+      ? `${api.previewImageUrl(detail.id, { ...PREVIEW_SETTINGS, pending_only: true }, 1, 150, detail.revision)}&list=${list?.rows.find((row) => !row.printed && !row.printing)?.id ?? ''}`
+      : api.previewImageUrl(detail.id, PREVIEW_SETTINGS, 1, 150, detail.revision)
+    : ''
+  const preview = useUprightSrc(previewUrl, detail?.content.rotate ?? false)
 
   const locked = detail?.limitations.some((limitation) => limitation.blocks_editing) ?? false
   const busy = printState.phase === 'sending' || printState.phase === 'waiting'
@@ -289,9 +321,12 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
               {saving ? <span className="mobile-saving">{t('mobile.saving')}</span> : null}
             </div>
 
-            {texts.length === 0 ? <p className="mobile-note">{t('mobile.noText')}</p> : null}
+            {listMode && list ? (
+              <ListPanel docId={detail.id} list={list} onChange={setList} onProblem={setProblem} />
+            ) : null}
+            {!listMode && texts.length === 0 ? <p className="mobile-note">{t('mobile.noText')}</p> : null}
             {locked ? <p className="mobile-note">{t('mobile.readOnly')}</p> : null}
-            {texts.map((text, index) => (
+            {(listMode ? [] : texts).map((text, index) => (
               <label key={index} className="mobile-field">
                 {texts.length > 1 ? <span>{t('mobile.text', { number: index + 1 })}</span> : null}
                 <textarea
@@ -304,16 +339,18 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
               </label>
             ))}
 
-            <div className="mobile-copies">
-              <span>{t('mobile.copies')}</span>
-              <button type="button" aria-label="−" disabled={copies <= 1} onClick={() => setCopies(copies - 1)}>
-                −
-              </button>
-              <output>{copies}</output>
-              <button type="button" aria-label="+" disabled={copies >= 99} onClick={() => setCopies(copies + 1)}>
-                +
-              </button>
-            </div>
+            {listMode ? null : (
+              <div className="mobile-copies">
+                <span>{t('mobile.copies')}</span>
+                <button type="button" aria-label="−" disabled={copies <= 1} onClick={() => setCopies(copies - 1)}>
+                  −
+                </button>
+                <output>{copies}</output>
+                <button type="button" aria-label="+" disabled={copies >= 99} onClick={() => setCopies(copies + 1)}>
+                  +
+                </button>
+              </div>
+            )}
 
             {printerList && printerList.length === 0 ? (
               <p className="mobile-note">{t('mobile.noPrinter')}</p>
@@ -349,8 +386,15 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       {detail ? (
         <footer className="mobile-action">
           <PrintStatus state={printState} />
-          <button type="button" className="mobile-print" disabled={!printer || busy} onClick={() => void print()}>
-            {busy ? t('mobile.sending') : t('mobile.print', { count: copies })}
+          <button
+            type="button"
+            className="mobile-print"
+            disabled={!printer || busy || (listMode && (list?.pending_labels ?? 0) === 0)}
+            onClick={() => void print()}
+          >
+            {busy
+              ? t('mobile.sending')
+              : t('mobile.print', { count: listMode ? (list?.pending_labels ?? 0) : copies })}
           </button>
         </footer>
       ) : null}

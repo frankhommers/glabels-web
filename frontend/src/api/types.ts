@@ -224,6 +224,8 @@ export type PrintSettings = {
   reverse: boolean
   collate: boolean
   group_per_page: boolean
+  /** Only the rows of the label's list still to print, each as often as its copies. */
+  pending_only?: boolean
 }
 
 export type PreviewInfo = {

@@ -167,3 +167,26 @@ def test_an_embedded_picture_is_printed(client):
     assert pdf.status_code == 200, pdf.text
     # The renderer found the picture in the document and drew it.
     assert b"/Subtype /Image" in pdf.content or b"/Subtype/Image" in pdf.content
+
+
+def test_only_the_rows_still_to_print_are_printed(client):
+    doc = client.post("/api/documents", json={"name": "Books", "brand": "Dymo", "part": "30252"}).json()
+    content = doc["content"]
+    content["objects"] = [{"type": "text", "x_pt": 5, "y_pt": 5, "w_pt": 200, "h_pt": 30, "lines": ["${name}"]}]
+    client.put(f"/api/documents/{doc['id']}", json={"content": content})
+    rows = [
+        client.post(f"/api/documents/{doc['id']}/list/rows", json={"values": {"name": name}, "copies": copies}).json()
+        for name, copies in (("Ada", 1), ("Bob", 3), ("Cy", 1))
+    ][-1]["rows"]
+    client.put(f"/api/documents/{doc['id']}/list/rows/{rows[0]['id']}", json={"printed": True})
+
+    # Bob three times and Cy once; Ada was printed already. One label per page on a roll.
+    info = client.get(f"/api/documents/{doc['id']}/preview", params={"copies": 1, "pending_only": True})
+    assert info.status_code == 200, info.text
+    assert info.json()["pages"] == 4
+    everything = client.get(f"/api/documents/{doc['id']}/preview", params={"copies": 1})
+    assert everything.json()["pages"] == 3
+
+    client.post(f"/api/documents/{doc['id']}/list/printed", json={"printed": True})
+    nothing = client.get(f"/api/documents/{doc['id']}/preview", params={"copies": 1, "pending_only": True})
+    assert (nothing.status_code, nothing.json()["detail"]) == (409, "nothing-to-print")
