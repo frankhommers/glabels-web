@@ -508,6 +508,23 @@ legend { padding: 0 4px; color: var(--text-muted); }
 .project-table { width: 100%; border-collapse: collapse; background: var(--base); }
 .project-table th, .project-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border-light); }
 .project-table th { background: var(--window-alt); font-weight: 600; }
+.project-table th:has(> .sort-header) { padding: 0; }
+.sort-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: default;
+}
+.sort-header:hover { background: var(--button-hover); }
+.sort-arrow { font-size: 0.7em; color: var(--text-muted); }
 .project-table tbody tr { cursor: default; }
 .project-table tbody tr.selected { background: var(--highlight); color: #fff; }
 .project-table tbody tr.selected .linklike,

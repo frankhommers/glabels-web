@@ -12,6 +12,7 @@ import { formatMoment } from '../app/locale'
 import { useT } from '../i18n'
 import { useDialogs } from '../ui/dialogs'
 import { Icon } from '../ui/Icon'
+import { compareNumber, compareText, SortHeader, sorted, useSort } from '../ui/sorting'
 import type { FileKind } from '../api/files'
 import { PlacesNav } from './FileBrowser'
 
@@ -55,6 +56,23 @@ export function ProjectsView({
   }, [load])
 
   const chosen = projects.find((project) => project.id === selected) ?? null
+
+  // Newest first until the user picks another column.
+  const [sort, sortBy] = useSort('glabels-web.sort.projects', { key: 'modified', descending: true })
+  const ordered = sorted(projects, sort, (a, b) => {
+    const byName = compareText(a.name, b.name)
+    switch (sort.key) {
+      case 'location':
+        // Projects without a file after those in the folder.
+        return compareText(a.file_path ? a.file_path : '\uffff', b.file_path ? b.file_path : '\uffff') || byName
+      case 'product':
+        return compareText(`${a.template_brand} ${a.template_part}`, `${b.template_brand} ${b.template_part}`) || byName
+      case 'modified':
+        return compareNumber(Date.parse(a.updated_at), Date.parse(b.updated_at)) || byName
+      default:
+        return byName
+    }
+  })
 
   const rename = async () => {
     if (!chosen) return
@@ -125,10 +143,10 @@ export function ProjectsView({
         <table className="project-table file-table">
           <thead>
             <tr>
-              <th>{t('fileBrowser.name')}</th>
-              <th>{t('projects.location')}</th>
-              <th>{t('fileBrowser.product')}</th>
-              <th>{t('fileBrowser.modified')}</th>
+              <SortHeader label={t('fileBrowser.name')} column="name" state={sort} onSort={sortBy} />
+              <SortHeader label={t('projects.location')} column="location" state={sort} onSort={sortBy} />
+              <SortHeader label={t('fileBrowser.product')} column="product" state={sort} onSort={sortBy} />
+              <SortHeader label={t('fileBrowser.modified')} column="modified" state={sort} onSort={sortBy} descendingFirst />
             </tr>
           </thead>
           <tbody>
@@ -139,7 +157,7 @@ export function ProjectsView({
                 </td>
               </tr>
             ) : (
-              projects.map((project) => (
+              ordered.map((project) => (
                 <tr
                   key={project.id}
                   className={selected === project.id ? 'selected' : undefined}

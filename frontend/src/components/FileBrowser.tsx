@@ -10,6 +10,7 @@ import { formatMoment } from '../app/locale'
 import { useDialogs } from '../ui/dialogs'
 import { useT, type MessageKey } from '../i18n'
 import { Icon } from '../ui/Icon'
+import { compareNumber, compareText, SortHeader, sorted, useSort } from '../ui/sorting'
 
 type IconSpec = { name: string; theme?: 'glabels-flat' | 'glabels-web' }
 
@@ -175,6 +176,26 @@ export function FileBrowser({
   const visible = (entry: FileEntry) => entry.is_dir || !accept || accept.includes(entry.kind)
   const entries = (listing?.entries ?? []).filter(visible)
   const selectedEntry = entries.find((entry) => entry.path === selected) ?? null
+
+  // Folders stay on top, as in any file dialog; within them the chosen column.
+  const [sort, sortBy] = useSort('glabels-web.sort.files', { key: 'name', descending: false })
+  const compareEntries = (a: FileEntry, b: FileEntry) => {
+    const byName = compareText(a.name, b.name)
+    switch (sort.key) {
+      case 'kind':
+        return compareText(t(kindLabelKey(a.kind)), t(kindLabelKey(b.kind))) || byName
+      case 'size':
+        return compareNumber(a.size_bytes, b.size_bytes) || byName
+      case 'modified':
+        return compareNumber(Date.parse(a.modified_at), Date.parse(b.modified_at)) || byName
+      default:
+        return byName
+    }
+  }
+  const ordered = [
+    ...sorted(entries.filter((entry) => entry.is_dir), sort, compareEntries),
+    ...sorted(entries.filter((entry) => !entry.is_dir), sort, compareEntries),
+  ]
 
   const activate = async (entry: FileEntry) => {
     if (entry.is_dir) {
@@ -397,10 +418,10 @@ export function FileBrowser({
           <table className="project-table file-table">
             <thead>
               <tr>
-                <th>{t('fileBrowser.name')}</th>
-                <th>{t('fileBrowser.kind')}</th>
-                <th>{t('fileBrowser.size')}</th>
-                <th>{t('fileBrowser.modified')}</th>
+                <SortHeader label={t('fileBrowser.name')} column="name" state={sort} onSort={sortBy} />
+                <SortHeader label={t('fileBrowser.kind')} column="kind" state={sort} onSort={sortBy} />
+                <SortHeader label={t('fileBrowser.size')} column="size" state={sort} onSort={sortBy} descendingFirst />
+                <SortHeader label={t('fileBrowser.modified')} column="modified" state={sort} onSort={sortBy} descendingFirst />
               </tr>
             </thead>
             <tbody>
@@ -413,7 +434,7 @@ export function FileBrowser({
                   </td>
                 </tr>
               ) : (
-                entries.map((entry) => (
+                ordered.map((entry) => (
                   <tr
                     key={entry.path}
                     className={selected === entry.path ? 'selected' : undefined}
