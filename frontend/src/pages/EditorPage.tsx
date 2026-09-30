@@ -26,6 +26,8 @@ export function addObject(session: Session, type: CreatableType) {
   const id = `new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   session.commit([...session.objects, { ...created, id }])
   session.setSelection([id])
+  // A new text: type right away; its sample text is selected, so it goes.
+  if (type === 'text') session.setEditing({ id, selectAll: true })
 }
 
 export function EditorPage({
@@ -186,6 +188,8 @@ export function EditorPage({
             onSelectionChange={session.setSelection}
             onObjectsPreview={session.history.replace}
             onObjectsCommit={session.commit}
+            editing={readOnly ? null : session.editing}
+            onEditingChange={session.setEditing}
           />
         </CanvasViewport>
         <ObjectEditor

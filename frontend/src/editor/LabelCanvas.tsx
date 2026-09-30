@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { DocumentDetail, DocumentObject } from '../api/types'
+import type { DocumentDetail, DocumentObject, TextObject } from '../api/types'
 import { useT } from '../i18n'
 import { labelSize } from './label'
 import { boundsOf, cssColor, isSized } from './objects'
 import { layoutText, useFontsVersion } from './textLayout'
+import { TextEditor } from './TextEditor'
 
 type Drag =
   | { kind: 'move'; startX: number; startY: number; origin: DocumentObject[] }
@@ -36,6 +37,41 @@ export type CanvasProps = {
   onSelectionChange: (ids: string[]) => void
   onObjectsPreview: (objects: DocumentObject[]) => void
   onObjectsCommit: (objects: DocumentObject[]) => void
+  /** The text object being typed in on the label, if any. */
+  editing?: { id: string; selectAll: boolean } | null
+  onEditingChange?: (editing: { id: string; selectAll: boolean } | null) => void
+}
+
+/** Where an object can be picked up: its whole frame, as in the desktop
+ *  app, not only the pixels it draws. A line gets a band at least 8 screen
+ *  pixels wide. */
+function HitArea({ object, zoom }: { object: DocumentObject; zoom: number }) {
+  if (object.type === 'line') {
+    return (
+      <line
+        x1={0}
+        y1={0}
+        x2={object.dx_pt}
+        y2={object.dy_pt}
+        stroke="transparent"
+        strokeWidth={Math.max(object.line_width_pt, 8 / zoom)}
+        pointerEvents="stroke"
+      />
+    )
+  }
+  if (isSized(object)) {
+    return (
+      <rect
+        x={Math.min(0, object.w_pt)}
+        y={Math.min(0, object.h_pt)}
+        width={Math.abs(object.w_pt)}
+        height={Math.abs(object.h_pt)}
+        fill="transparent"
+        pointerEvents="all"
+      />
+    )
+  }
+  return null
 }
 
 function transformOf(object: DocumentObject): string {
@@ -222,8 +258,17 @@ export function LabelCanvas(props: CanvasProps) {
     [snap, gridPt],
   )
 
+  /** A click while typing only ends the typing (which keeps the text); a
+   *  drag straight away would work from the objects before that change. */
+  const endTyping = () => {
+    if (!props.editing) return false
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    return true
+  }
+
   const startMove = (event: React.PointerEvent, object: DocumentObject) => {
     event.stopPropagation()
+    if (endTyping()) return
     const point = pointAt(event)
     const ids = object.id
       ? event.shiftKey
@@ -319,13 +364,15 @@ export function LabelCanvas(props: CanvasProps) {
         .map((object) => object.id)
         .filter((id): id is string => Boolean(id))
       props.onSelectionChange(ids)
-    } else {
+    } else if (objects !== drag.origin) {
+      // Only a real move or resize is a change; a click merely selects.
       props.onObjectsCommit(objects)
     }
     setDrag(null)
   }
 
   const onBackgroundDown = (event: React.PointerEvent) => {
+    if (endTyping()) return
     const point = pointAt(event)
     if (!event.shiftKey) props.onSelectionChange([])
     setDrag({ kind: 'marquee', startX: point.x, startY: point.y, x: point.x, y: point.y })
@@ -333,7 +380,19 @@ export function LabelCanvas(props: CanvasProps) {
 
   const margin = doc.markups.find((markup) => markup.type === 'margin')
 
+  const editingObject = props.editing
+    ? (objects.find((object) => object.id === props.editing?.id && object.type === 'text') as TextObject | undefined)
+    : undefined
+
+  const finishEditing = (lines: string[] | null) => {
+    const target = editingObject
+    props.onEditingChange?.(null)
+    if (!target || lines === null || lines.join('\n') === target.lines.join('\n')) return
+    props.onObjectsCommit(objects.map((object) => (object === target ? { ...target, lines } : object)))
+  }
+
   return (
+    <div className="canvas-stage">
     <svg
       ref={svgRef}
       className="label-canvas"
@@ -380,9 +439,16 @@ export function LabelCanvas(props: CanvasProps) {
           key={object.id ?? `new-${index}`}
           transform={transformOf(object)}
           onPointerDown={(event) => startMove(event, object)}
+          onDoubleClick={() => {
+            if (object.type === 'text' && object.id) props.onEditingChange?.({ id: object.id, selectAll: false })
+          }}
           style={{ cursor: object.type === 'unsupported' ? 'not-allowed' : 'move' }}
         >
-          <ObjectShape object={object} docId={doc.id} />
+          <HitArea object={object} zoom={zoom} />
+          {/* While typing, the text field shows the text instead. */}
+          <g opacity={editingObject?.id === object.id ? 0 : 1}>
+            <ObjectShape object={object} docId={doc.id} />
+          </g>
         </g>
       ))}
 
@@ -434,5 +500,15 @@ export function LabelCanvas(props: CanvasProps) {
         />
       ) : null}
     </svg>
+      {editingObject ? (
+        <TextEditor
+          key={editingObject.id ?? ''}
+          object={editingObject}
+          zoom={zoom}
+          selectAll={props.editing?.selectAll ?? false}
+          onDone={finishEditing}
+        />
+      ) : null}
+    </div>
   )
 }

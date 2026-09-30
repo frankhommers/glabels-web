@@ -47,6 +47,9 @@ export function fitZoom(widthPt: number, heightPt: number): number {
 export function useSession(t: Translate) {
   const [detail, setDetail] = useState<DocumentDetail | null>(null)
   const [selection, setSelection] = useState<string[]>([])
+  // The text object being typed in on the label; for a new one its sample
+  // text starts selected, so typing replaces it.
+  const [editing, setEditing] = useState<{ id: string; selectAll: boolean } | null>(null)
   const [zoom, setZoom] = useState(2)
   const [unit, setUnitState] = useState<UnitId>('mm')
   const [showGrid, setShowGrid] = useState(true)
@@ -82,6 +85,7 @@ export function useSession(t: Translate) {
         setZoom(fitZoom(size.w, size.h))
         history.reset(document.content.objects)
         setSelection([])
+        setEditing(null)
         setDirty(false)
         dirtyRef.current = false
         setStatus('status.opened', { name: document.name })
@@ -138,6 +142,9 @@ export function useSession(t: Translate) {
             )
           history.remap(rename)
           setSelection((current) => current.map((id) => renewed.get(id) ?? id))
+          setEditing((current) =>
+            current && renewed.has(current.id) ? { ...current, id: renewed.get(current.id) as string } : current,
+          )
         }
         history.adopt(saved.content.objects)
         setDirty(false)
@@ -294,6 +301,8 @@ export function useSession(t: Translate) {
     setPrintSettings,
     clipboard,
     setClipboard,
+    editing,
+    setEditing,
     addObjects,
     open,
     save,
