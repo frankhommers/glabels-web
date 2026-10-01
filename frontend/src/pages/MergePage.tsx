@@ -141,6 +141,41 @@ export function MergePage({ session }: { session: Session }) {
         </fieldset>
       ) : null}
 
+      {list?.available && list.fields.length > 0 ? (
+        <fieldset>
+          <legend>{t('merge.fieldLines')}</legend>
+          <p className="muted">{t('merge.fieldLinesHint')}</p>
+          <div className="field-lines">
+            {list.fields.map((field) => {
+              const auto = list.lines_auto[field] === 'multi' ? t('list.moreLines') : t('list.oneLine')
+              return (
+                <div key={field} className="form-row">
+                  <label htmlFor={`lines-${field}`}>
+                    <code>{'${' + field + '}'}</code>
+                  </label>
+                  <select
+                    id={`lines-${field}`}
+                    value={list.lines_chosen[field] ?? 'auto'}
+                    onChange={async (event) => {
+                      try {
+                        const value = event.target.value as 'auto' | 'multi' | 'single'
+                        await listChanged(await lists.setLines(detail.id, field, value))
+                      } catch (error) {
+                        setProblem(String(error instanceof Error ? error.message : error))
+                      }
+                    }}
+                  >
+                    <option value="auto">{t('merge.linesAuto', { mode: auto })}</option>
+                    <option value="single">{t('list.oneLine')}</option>
+                    <option value="multi">{t('list.moreLines')}</option>
+                  </select>
+                </div>
+              )
+            })}
+          </div>
+        </fieldset>
+      ) : null}
+
       {preview && preview.keys.length > 0 && !(list?.available && list.fields.length > 0) ? (
         <>
           <fieldset>
