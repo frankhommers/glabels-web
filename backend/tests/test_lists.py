@@ -202,3 +202,45 @@ def test_the_labels_variables_are_not_asked_for(env):
     ).json()
     # The counter fills itself in; only the box is a field to fill in.
     assert client.get(f"/api/documents/{imported['id']}/list").json()["fields"] == ["box"]
+
+
+def test_a_value_over_several_lines_is_kept_as_gLabels_reads_it(env):
+    client, _state, _printer, folder = env
+    doc = _label(client, "${address}")
+    listed = client.post(
+        f"/api/documents/{doc}/list/rows", json={"values": {"address": "Main street 1\nVillage\twest, \"A\" \\ B"}}
+    ).json()
+    assert listed["rows"][0]["values"]["address"] == "Main street 1\nVillage\twest, \"A\" \\ B"
+    # One record per line in the file; gLabels turns \n into a new line when it prints.
+    line = (folder / "merges" / "Books.tsv").read_text().splitlines()[1]
+    assert line.startswith('Main street 1\\nVillage\\twest, "A" \\\\ B\t')
+
+
+def test_fields_take_several_lines_when_their_box_has_room(env):
+    client, _state, _printer, folder = env
+    doc = client.post("/api/documents", json={"name": "Box", "brand": "Dymo", "part": "30252"}).json()
+    content = doc["content"]
+    content["objects"] = [
+        {"type": "text", "x_pt": 5, "y_pt": 5, "w_pt": 200, "h_pt": 18, "lines": ["${name}"], "font_size": 10},
+        {"type": "text", "x_pt": 5, "y_pt": 25, "w_pt": 200, "h_pt": 50, "lines": ["${address}"], "font_size": 10},
+    ]
+    client.put(f"/api/documents/{doc['id']}", json={"content": content})
+    listed = client.get(f"/api/documents/{doc['id']}/list").json()
+    assert listed["lines"] == {"name": "single", "address": "multi"}
+    assert listed["lines_chosen"] == {}
+
+    # A choice of one's own goes into the label file ...
+    chosen = client.put(f"/api/documents/{doc['id']}/list/fields/name", json={"lines": "multi"}).json()
+    assert chosen["lines"]["name"] == "multi" and chosen["lines_chosen"] == {"name": "multi"}
+    raw = client.get(f"/api/documents/{doc['id']}/file").content.decode()
+    assert '<glw:Field name="name" lines="multi"/>' in raw
+
+    # ... and once gLabels on a desktop has saved it without, it is automatic again.
+    desktop = raw.split("  <glw:Fields")[0] + "</Glabels-document>\n"
+    reopened = client.post(
+        "/api/documents/import", files={"file": ("box.glabels", desktop.encode(), "application/x-glabels")}
+    ).json()
+    assert client.get(f"/api/documents/{reopened['id']}/list").json()["lines"]["name"] == "single"
+
+    back = client.put(f"/api/documents/{doc['id']}/list/fields/name", json={"lines": "auto"}).json()
+    assert back["lines_chosen"] == {} and "glw:" not in client.get(f"/api/documents/{doc['id']}/file").text

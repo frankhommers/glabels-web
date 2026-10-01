@@ -216,3 +216,20 @@ def test_one_label_is_cut_out_of_the_sheet(client):
     assert client.get(f"/api/documents/{doc['id']}/label.png", params={"row": "nope"}).status_code == 404
     # The label as it stands, without a row.
     assert client.get(f"/api/documents/{doc['id']}/label.png", params={"dpi": 72}).status_code == 200
+
+
+def test_our_own_settings_and_line_breaks_reach_the_print(client):
+    doc = client.post("/api/documents", json={"name": "Address", "brand": "Dymo", "part": "30252"}).json()
+    content = doc["content"]
+    content["objects"] = [{"type": "text", "x_pt": 5, "y_pt": 5, "w_pt": 220, "h_pt": 60, "lines": ["${address}"], "font_size": 14}]
+    client.put(f"/api/documents/{doc['id']}", json={"content": content})
+    # The renderer is gLabels itself: it must pass over our element.
+    client.put(f"/api/documents/{doc['id']}/list/fields/address", json={"lines": "multi"})
+    client.post(f"/api/documents/{doc['id']}/list/rows", json={"values": {"address": "Main street 1\nVillage"}})
+
+    pdf = client.get(f"/api/documents/{doc['id']}/print.pdf", params={"copies": 1})
+    assert pdf.status_code == 200, pdf.text
+    one_line = client.get(f"/api/documents/{doc['id']}/label.png", params={"values": '{"address": "Main street 1 Village"}', "dpi": 72})
+    two_lines = client.get(f"/api/documents/{doc['id']}/label.png", params={"values": '{"address": "Main street 1\\nVillage"}', "dpi": 72})
+    assert one_line.status_code == two_lines.status_code == 200
+    assert one_line.content != two_lines.content

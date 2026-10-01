@@ -137,6 +137,17 @@
 
 .mobile-field { display: flex; flex-direction: column; gap: 6px; }
 .mobile-field > span { font-size: 14px; color: var(--text-muted); }
+.mobile-field-head { display: flex; align-items: center; justify-content: space-between; }
+.mobile-lines-toggle {
+  width: 32px;
+  height: 26px;
+  font-size: 15px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.mobile-lines-toggle[aria-pressed='true'] { color: var(--highlight); border-color: var(--highlight); }
 .mobile-field textarea,
 .mobile-field input,
 .mobile-field select {

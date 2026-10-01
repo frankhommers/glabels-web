@@ -72,19 +72,28 @@ export function ListTable({
           </thead>
           <tbody>
             {list.rows.map((row) => (
-              <RowEditor key={row.id} docId={docId} row={row} columns={columns} run={run} />
+              <RowEditor key={row.id} docId={docId} row={row} columns={columns} multi={list.lines} run={run} />
             ))}
             <tr className="list-new">
               {columns.map((key, index) => (
                 <td key={key}>
-                  <input
-                    value={draft[key] ?? ''}
-                    placeholder={index === 0 ? t('list.newRow') : undefined}
-                    onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') void add()
-                    }}
-                  />
+                  {list.lines[key] === 'multi' ? (
+                    <textarea
+                      rows={Math.max(1, (draft[key] ?? '').split('\n').length)}
+                      value={draft[key] ?? ''}
+                      placeholder={index === 0 ? t('list.newRow') : undefined}
+                      onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+                    />
+                  ) : (
+                    <input
+                      value={draft[key] ?? ''}
+                      placeholder={index === 0 ? t('list.newRow') : undefined}
+                      onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void add()
+                      }}
+                    />
+                  )}
                 </td>
               ))}
               <td className="list-copies">
@@ -113,11 +122,14 @@ function RowEditor({
   docId,
   row,
   columns,
+  multi,
   run,
 }: {
   docId: string
   row: ListRow
   columns: string[]
+  /** Per field: several lines or one. */
+  multi: LabelList['lines']
   run: (work: () => Promise<LabelList>) => Promise<void>
 }) {
   const t = useT()
@@ -136,11 +148,20 @@ function RowEditor({
     <tr className={row.printed ? 'list-printed' : undefined}>
       {columns.map((key) => (
         <td key={key}>
-          <input
-            value={values[key] ?? ''}
-            onChange={(event) => setValues({ ...values, [key]: event.target.value })}
-            onBlur={() => saveValue(key)}
-          />
+          {multi[key] === 'multi' ? (
+            <textarea
+              rows={Math.max(1, (values[key] ?? '').split('\n').length)}
+              value={values[key] ?? ''}
+              onChange={(event) => setValues({ ...values, [key]: event.target.value })}
+              onBlur={() => saveValue(key)}
+            />
+          ) : (
+            <input
+              value={values[key] ?? ''}
+              onChange={(event) => setValues({ ...values, [key]: event.target.value })}
+              onBlur={() => saveValue(key)}
+            />
+          )}
         </td>
       ))}
       <td className="list-copies">

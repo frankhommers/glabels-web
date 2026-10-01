@@ -7,8 +7,6 @@ doubt, the renderer's output is authoritative.
 
 from __future__ import annotations
 
-import csv
-import io
 from dataclasses import dataclass
 
 # Ids from backends/merge/*.cpp; these strings are what the file contains.
@@ -38,6 +36,108 @@ class MergePreview:
     truncated: bool
 
 
+def parse_text(text: str, delimiter: str) -> list[list[str]]:
+    """Split a text source into records the way gLabels does.
+
+    A copy of upstream's merge::Text::parseLine: RFC 4180 with additions.
+    A backslash takes the next character literally, except that \\n is a new
+    line and \\t a tab; a quoted field may hold the delimiter, quotes ("")
+    and line breaks; text after a closing quote is added to the field.
+    """
+    records: list[list[str]] = []
+    fields: list[str] = []
+    field: list[str] = []
+    state = "delim"
+    for c in text:
+        if state == "delim":
+            if c == "\n":
+                fields.append("")
+                records.append(fields)
+                fields = []
+            elif c == "\r":
+                pass
+            elif c == '"':
+                state = "quoted"
+            elif c == "\\":
+                state = "simple_escaped"
+            elif c == delimiter:
+                fields.append("")
+            else:
+                field.append(c)
+                state = "simple"
+        elif state == "quoted":
+            if c == '"':
+                state = "quoted_quote1"
+            elif c == "\\":
+                state = "quoted_escaped"
+            else:
+                field.append(c)
+        elif state == "quoted_quote1":
+            if c == "\n":
+                fields.append("".join(field))
+                field = []
+                records.append(fields)
+                fields = []
+                state = "delim"
+            elif c == '"':
+                field.append(c)
+                state = "quoted"
+            elif c == "\r":
+                state = "simple"
+            elif c == delimiter:
+                fields.append("".join(field))
+                field = []
+                state = "delim"
+            else:
+                field.append(c)
+                state = "simple"
+        elif state in ("quoted_escaped", "simple_escaped"):
+            field.append("\n" if c == "n" else "\t" if c == "t" else c)
+            state = "quoted" if state == "quoted_escaped" else "simple"
+        elif state == "simple":
+            if c == "\n":
+                fields.append("".join(field))
+                field = []
+                records.append(fields)
+                fields = []
+                state = "delim"
+            elif c == "\r":
+                pass
+            elif c == "\\":
+                state = "simple_escaped"
+            elif c == delimiter:
+                fields.append("".join(field))
+                field = []
+                state = "delim"
+            else:
+                field.append(c)
+    if state != "delim":
+        fields.append("".join(field))
+    if fields:
+        records.append(fields)
+    # A blank line is one empty field; it holds no record.
+    return [record for record in records if record != [""]]
+
+
+def escape_value(value: str, delimiter: str) -> str:
+    """Write a value so parse_text (and gLabels) reads it back unchanged."""
+    out = []
+    for index, c in enumerate(value):
+        if c == "\\":
+            out.append("\\\\")
+        elif c == "\n":
+            out.append("\\n")
+        elif c == "\t":
+            out.append("\\t")
+        elif c == "\r":
+            continue
+        elif c == delimiter or (c == '"' and index == 0):
+            out.append("\\" + c)
+        else:
+            out.append(c)
+    return "".join(out)
+
+
 def is_known_type(merge_type: str) -> bool:
     return merge_type in MERGE_TYPES
 
@@ -56,8 +156,8 @@ def preview(data: bytes, merge_type: str, *, limit: int = 25) -> MergePreview:
     if not delimiter:
         return MergePreview(keys=[], records=[], record_count=0, truncated=False)
 
-    text = data.decode("utf-8", errors="replace")
-    rows = [row for row in csv.reader(io.StringIO(text, newline=""), delimiter=delimiter) if row]
+    text = data.decode("utf-8-sig", errors="replace")
+    rows = parse_text(text, delimiter)
     if not rows:
         return MergePreview(keys=[], records=[], record_count=0, truncated=False)
 

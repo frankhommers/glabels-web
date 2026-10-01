@@ -603,6 +603,8 @@ export const en = {
   'list.status': 'Printed',
   'list.newRow': 'New row…',
   'list.toPrintShort': 'to print',
+  'list.moreLines': 'Several lines',
+  'list.oneLine': 'One line',
   'list.addTitle': 'Add to the list',
   'list.add': 'Add',
   'list.toPrint': { one: 'To print: {count} label', other: 'To print: {count} labels' },

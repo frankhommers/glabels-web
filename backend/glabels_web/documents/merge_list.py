@@ -18,13 +18,11 @@ field name.
 
 from __future__ import annotations
 
-import csv
-import io
 import re
 import secrets
 from dataclasses import dataclass, field
 
-from .merge import MERGE_TYPES, MergeError
+from .merge import MERGE_TYPES, MergeError, escape_value, parse_text
 
 ID, COPIES, PRINTED = "_id", "_copies", "_printed"
 META = (ID, COPIES, PRINTED)
@@ -84,8 +82,7 @@ def _copies(value: str) -> int:
 def parse(data: bytes, merge_type: str) -> MergeList:
     """Read a source as a list; rows without an id get one."""
     delimiter = _delimiter(merge_type)
-    text = data.decode("utf-8-sig", errors="replace")
-    lines = [line for line in csv.reader(io.StringIO(text, newline=""), delimiter=delimiter) if line]
+    lines = parse_text(data.decode("utf-8-sig", errors="replace"), delimiter)
     if not lines:
         return MergeList(keys=[])
     header = [name.strip() for name in lines[0]]
@@ -104,26 +101,20 @@ def parse(data: bytes, merge_type: str) -> MergeList:
     return MergeList(keys=keys, rows=rows)
 
 
-def _clean(value: str, delimiter: str) -> str:
-    # One row per line: line breaks and the delimiter itself would split it.
-    return re.sub(r"[\r\n]+", " ", value).replace(delimiter, " ")
-
-
 def serialize(merge_list: MergeList, merge_type: str, *, rows: list[Row] | None = None) -> bytes:
+    """One record per line. A line break in a value is written as \\n, which
+    gLabels turns back into a line break when it prints."""
     delimiter = _delimiter(merge_type)
-    out = io.StringIO()
-    writer = csv.writer(out, delimiter=delimiter, lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
-    writer.writerow([*merge_list.keys, *META])
+
+    def line(values: list[str]) -> str:
+        return delimiter.join(escape_value(value, delimiter) for value in values)
+
+    lines = [line([*merge_list.keys, *META])]
     for row in merge_list.rows if rows is None else rows:
-        writer.writerow(
-            [
-                *(_clean(row.values.get(key, ""), delimiter) for key in merge_list.keys),
-                row.id,
-                str(row.copies),
-                row.printed,
-            ]
+        lines.append(
+            line([*(row.values.get(key, "") for key in merge_list.keys), row.id, str(row.copies), row.printed])
         )
-    return out.getvalue().encode("utf-8")
+    return ("\n".join(lines) + "\n").encode("utf-8")
 
 
 def pending(merge_list: MergeList, busy: set[str]) -> list[Row]:

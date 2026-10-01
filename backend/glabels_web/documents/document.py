@@ -141,6 +141,9 @@ _H_ALIGN_WRITE = {"left": "left", "center": "hcenter", "right": "right"}
 _V_ALIGN_WRITE = {"top": "top", "center": "vcenter", "bottom": "bottom"}
 
 
+# Our own settings in a .glabels file (see Document.field_lines).
+WEB_NAMESPACE = "https://github.com/frankhommers/glabels-web/ns/1"
+
 class Document:
     """Wrapper around the XML tree of one ``.glabels`` file."""
 
@@ -564,6 +567,42 @@ class Document:
         else:
             node.set("encoding", "base64")
             node.text = base64.b64encode(payload).decode("ascii")
+
+    # ------------------------------------------------------ our own settings
+    #
+    # Settings of this application that gLabels has no place for live in an
+    # element of their own, in a namespace of their own, at the end of the
+    # file. The desktop app passes over an element it does not know when
+    # reading (it logs a warning nobody sees); when it saves, it writes only
+    # what it knows, so these settings are gone and their defaults apply.
+
+    def field_lines(self) -> dict[str, str]:
+        """Per field: "multi" or "single" lines on a phone; absent is automatic."""
+        node = self._root.find(f"{{{WEB_NAMESPACE}}}Fields")
+        if node is None:
+            return {}
+        return {
+            field.get("name", ""): field.get("lines", "")
+            for field in node.findall(f"{{{WEB_NAMESPACE}}}Field")
+            if field.get("name") and field.get("lines") in ("multi", "single")
+        }
+
+    def set_field_lines(self, name: str, lines: str | None) -> None:
+        """Set "multi" or "single" for a field, or None to go back to automatic."""
+        container = self._root.find(f"{{{WEB_NAMESPACE}}}Fields")
+        if container is None:
+            if lines is None:
+                return
+            container = etree.SubElement(self._root, f"{{{WEB_NAMESPACE}}}Fields", nsmap={"glw": WEB_NAMESPACE})
+        for field in container.findall(f"{{{WEB_NAMESPACE}}}Field"):
+            if field.get("name") == name:
+                container.remove(field)
+        if lines is not None:
+            node = etree.SubElement(container, f"{{{WEB_NAMESPACE}}}Field")
+            node.set("name", name)
+            node.set("lines", lines)
+        if len(container) == 0:
+            self._root.remove(container)
 
     def prune_embedded_files(self) -> int:
         """Drop embedded files no image object refers to any more.

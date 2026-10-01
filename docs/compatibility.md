@@ -114,3 +114,18 @@ Points of attention:
   exactly as `glabels-batch-qt` uses it.
 - We do not know `Data/Fixed`-like or other non-text merge backends; such
   references stay unchanged in the file.
+
+### Settings of our own
+
+Settings gLabels has no place for (whether a list field takes several lines
+on a phone) are kept in an element of our own at the end of the file, in a
+namespace of our own:
+
+```xml
+<glw:Fields xmlns:glw="https://github.com/frankhommers/glabels-web/ns/1">
+  <glw:Field name="address" lines="multi"/>
+</glw:Fields>
+```
+
+gLabels on a desktop passes over it when reading (it logs a warning) and
+leaves it out when it saves; then the field follows the design again.

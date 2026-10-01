@@ -24,6 +24,12 @@ export type LabelList = {
   rows: ListRow[]
   pending_rows: number
   pending_labels: number
+  /** Per field: "multi" (several lines) or "single". */
+  lines: Record<string, 'multi' | 'single'>
+  /** Choices made in the label; a field without one follows the design. */
+  lines_chosen: Record<string, 'multi' | 'single'>
+  /** What the design gives. */
+  lines_auto: Record<string, 'multi' | 'single'>
 }
 
 async function call(path: string, init?: RequestInit): Promise<LabelList> {
@@ -55,4 +61,6 @@ export const lists = {
   markPrinted: (id: string, printed = true, ids?: string[]) =>
     call(`${base(id)}/printed`, { method: 'POST', body: JSON.stringify({ printed, ids: ids ?? null }) }),
   clearPrinted: (id: string) => call(`${base(id)}/clear-printed`, { method: 'POST' }),
+  setLines: (id: string, field: string, lines: 'auto' | 'multi' | 'single') =>
+    call(`${base(id)}/fields/${encodeURIComponent(field)}`, { method: 'PUT', body: JSON.stringify({ lines }) }),
 }

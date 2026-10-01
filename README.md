@@ -184,6 +184,11 @@ suits you, from the Merge page or from a phone, and print together later.
   when no screen is open. Printed rows stay, to print again or clear away;
   a row on its way to the printer is not printed twice.
 
+A field takes several lines on the phone when its text box has room for two
+lines or more; the ↵ button next to a field changes that, and the choice is
+kept in the label. A line break in a value is stored as `\n`, which gLabels
+prints as a new line.
+
 The list is the label's merge source, an ordinary text file with field names
 on line 1; a label with fields but no source gets `merges/<label>.tsv` with
 its first row. Three columns are added at the end: `_id`, `_copies` and

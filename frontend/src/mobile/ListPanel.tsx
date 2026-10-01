@@ -35,7 +35,14 @@ export function ListPanel({
   const [copies, setCopies] = useState(1)
   const [adding, setAdding] = useState(false)
   const [showPrinted, setShowPrinted] = useState(false)
-  const firstField = useRef<HTMLInputElement | null>(null)
+  const fieldRefs = useRef<(HTMLInputElement | HTMLTextAreaElement | null)[]>([])
+
+  /** One line or several: the opposite of now; back to automatic when that
+   *  is what the design gives anyway, so the label keeps no needless setting. */
+  const toggleLines = (field: string) => {
+    const next = list.lines[field] === 'multi' ? 'single' : 'multi'
+    void run(() => lists.setLines(docId, field, next === list.lines_auto[field] ? 'auto' : next))
+  }
 
   // The preview follows the typing once it pauses, not every key.
   useEffect(() => {
@@ -60,13 +67,16 @@ export function ListPanel({
     setAdding(false)
     setValues({})
     setCopies(1)
-    firstField.current?.focus()
+    fieldRefs.current[0]?.focus()
   }
 
   const toPrint = list.rows.filter((row) => !row.printed)
   const printed = list.rows.filter((row) => row.printed)
   const describe = (row: ListRow) =>
-    list.fields.map((field) => row.values[field]).filter(Boolean).join(' · ') || '—'
+    list.fields
+      .map((field) => row.values[field]?.replace(/\n+/g, ' / '))
+      .filter(Boolean)
+      .join(' · ') || '—'
 
   return (
     <>
@@ -78,17 +88,54 @@ export function ListPanel({
         }}
       >
         <h2>{t('list.addTitle')}</h2>
-        {list.fields.map((field, index) => (
-          <label key={field} className="mobile-field">
-            <span>{field}</span>
-            <input
-              ref={index === 0 ? firstField : undefined}
-              value={values[field] ?? ''}
-              enterKeyHint={index === list.fields.length - 1 ? 'done' : 'next'}
-              onChange={(event) => setValues({ ...values, [field]: event.target.value })}
-            />
-          </label>
-        ))}
+        {list.fields.map((field, index) => {
+          const multi = list.lines[field] === 'multi'
+          const last = index === list.fields.length - 1
+          return (
+            <label key={field} className="mobile-field">
+              <span className="mobile-field-head">
+                {field}
+                <button
+                  type="button"
+                  className="mobile-lines-toggle"
+                  aria-pressed={multi}
+                  title={multi ? t('list.oneLine') : t('list.moreLines')}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    toggleLines(field)
+                  }}
+                >
+                  ↵
+                </button>
+              </span>
+              {multi ? (
+                <textarea
+                  ref={(element) => {
+                    fieldRefs.current[index] = element
+                  }}
+                  value={values[field] ?? ''}
+                  rows={Math.max(2, (values[field] ?? '').split('\n').length)}
+                  onChange={(event) => setValues({ ...values, [field]: event.target.value })}
+                />
+              ) : (
+                <input
+                  ref={(element) => {
+                    fieldRefs.current[index] = element
+                  }}
+                  value={values[field] ?? ''}
+                  enterKeyHint={last ? 'done' : 'next'}
+                  onKeyDown={(event) => {
+                    // Enter goes to the next field; on the last one it adds the row.
+                    if (event.key !== 'Enter' || last) return
+                    event.preventDefault()
+                    fieldRefs.current[index + 1]?.focus()
+                  }}
+                  onChange={(event) => setValues({ ...values, [field]: event.target.value })}
+                />
+              )}
+            </label>
+          )
+        })}
         <div className="mobile-copies">
           <span>{t('mobile.copies')}</span>
           <button type="button" aria-label="−" disabled={copies <= 1} onClick={() => setCopies(copies - 1)}>

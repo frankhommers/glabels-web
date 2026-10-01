@@ -66,6 +66,16 @@ class ListOut(BaseModel):
     rows: list[RowOut] = Field(default_factory=list)
     pending_rows: int = 0
     pending_labels: int = 0
+    # Per field: does it take more than one line ("multi") or not ("single")?
+    lines: dict[str, str] = Field(default_factory=dict)
+    # The choices made for that in the label; a field without one is automatic.
+    lines_chosen: dict[str, str] = Field(default_factory=dict)
+    # What automatic gives, from the design.
+    lines_auto: dict[str, str] = Field(default_factory=dict)
+
+
+class FieldLines(BaseModel):
+    lines: str = Field(pattern="^(auto|multi|single)$")
 
 
 class RowIn(BaseModel):
@@ -113,6 +123,28 @@ def label_fields(doc: Document) -> list[str]:
     return names
 
 
+def _auto_lines(doc: Document) -> dict[str, str]:
+    """A field takes several lines when a text box it is in has room for
+    two lines or more, in its own size (as the editor lays it out)."""
+    modes: dict[str, str] = {}
+    for obj in doc.content().objects:
+        if not isinstance(obj, TextObject):
+            continue
+        size = max(1, round(obj.font_size))
+        room = (obj.h_pt - 6) / (size * max(obj.line_spacing, 0.1) * 1.15)
+        mode = "multi" if room >= 2 else "single"
+        for name in merge_lists.fields_in_text("\n".join(obj.lines)):
+            if modes.get(name) != "multi":
+                modes[name] = mode
+    return modes
+
+
+def _lines(doc: Document, fields: list[str]) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    chosen = doc.field_lines()
+    auto = {name: _auto_lines(doc).get(name, "single") for name in fields}
+    return {name: chosen.get(name) or auto[name] for name in fields}, chosen, auto
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -133,11 +165,12 @@ def _read(app: AppState, doc_id: str):
         raise HTTPException(status_code=409, detail="needs-field-names") from exc
 
 
-def _out(app: AppState, doc_id: str, info, fields, merge_list) -> ListOut:
+def _out(app: AppState, doc_id: str, info, fields, merge_list, doc: Document | None = None) -> ListOut:
+    lines, chosen, auto = _lines(doc, fields) if doc is not None else ({}, {}, {})
     if merge_list is None:
         if not fields:
             return ListOut(available=False, reason="no-fields")
-        return ListOut(available=True, fields=fields, keys=list(fields))
+        return ListOut(available=True, fields=fields, keys=list(fields), lines=lines, lines_chosen=chosen, lines_auto=auto)
     busy = {row for record in app.store.unfinished_list_prints(doc_id) for row in record.list_rows}
     waiting = merge_lists.pending(merge_list, busy)
     return ListOut(
@@ -151,6 +184,9 @@ def _out(app: AppState, doc_id: str, info, fields, merge_list) -> ListOut:
         ],
         pending_rows=len(waiting),
         pending_labels=sum(row.copies for row in waiting),
+        lines=lines,
+        lines_chosen=chosen,
+        lines_auto=auto,
     )
 
 
@@ -186,12 +222,29 @@ def _create_source(app: AppState, doc_id: str, info, doc: Document, fields: list
 @router.get("/{doc_id}/list", response_model=ListOut)
 def get_list(doc_id: str, app: AppState = Depends(state)) -> ListOut:
     try:
-        info, _doc, fields, merge_list, _type = _read(app, doc_id)
+        info, doc, fields, merge_list, _type = _read(app, doc_id)
     except HTTPException as exc:
         if exc.detail == "needs-field-names":
             return ListOut(available=False, reason="needs-field-names")
         raise
-    return _out(app, doc_id, info, fields, merge_list)
+    return _out(app, doc_id, info, fields, merge_list, doc)
+
+
+@router.put("/{doc_id}/list/fields/{name}", response_model=ListOut)
+def set_field_lines(doc_id: str, name: str, request: FieldLines, app: AppState = Depends(state)) -> ListOut:
+    """One line or several for a field on a phone; "auto" follows the design.
+
+    Kept in the label itself (see Document.field_lines), so it travels with
+    the file; gLabels on a desktop drops it when it saves, and then the
+    field is automatic again.
+    """
+    with _lock:
+        info, doc = _load(app, doc_id)
+        doc.set_field_lines(name, None if request.lines == "auto" else request.lines)
+        app.store.save_revision(doc_id, doc.to_bytes(), object_ids=doc.object_ids())
+        _write_through(app, doc_id)
+    info, doc, fields, merge_list, _type = _read(app, doc_id)
+    return _out(app, doc_id, info, fields, merge_list, doc)
 
 
 @router.post("/{doc_id}/list/rows", response_model=ListOut, status_code=201)
@@ -208,13 +261,13 @@ def add_row(doc_id: str, request: RowIn, app: AppState = Depends(state)) -> List
             merge_lists.Row(id=merge_lists.new_id(), values=dict(request.values), copies=request.copies)
         )
         _save(app, info, merge_list, merge_type)
-        return _out(app, doc_id, info, fields, merge_list)
+        return _out(app, doc_id, info, fields, merge_list, doc)
 
 
 @router.put("/{doc_id}/list/rows/{row_id}", response_model=ListOut)
 def change_row(doc_id: str, row_id: str, request: RowChange, app: AppState = Depends(state)) -> ListOut:
     with _lock:
-        info, _doc, fields, merge_list, merge_type = _read(app, doc_id)
+        info, doc, fields, merge_list, merge_type = _read(app, doc_id)
         row = merge_list.row(row_id) if merge_list else None
         if row is None:
             raise HTTPException(status_code=404, detail="unknown row")
@@ -226,28 +279,28 @@ def change_row(doc_id: str, row_id: str, request: RowChange, app: AppState = Dep
         if request.printed is not None:
             row.printed = _now() if request.printed else ""
         _save(app, info, merge_list, merge_type)
-        return _out(app, doc_id, info, fields, merge_list)
+        return _out(app, doc_id, info, fields, merge_list, doc)
 
 
 @router.delete("/{doc_id}/list/rows/{row_id}", response_model=ListOut)
 def delete_row(doc_id: str, row_id: str, app: AppState = Depends(state)) -> ListOut:
     with _lock:
-        info, _doc, fields, merge_list, merge_type = _read(app, doc_id)
+        info, doc, fields, merge_list, merge_type = _read(app, doc_id)
         row = merge_list.row(row_id) if merge_list else None
         if row is None:
             raise HTTPException(status_code=404, detail="unknown row")
         merge_list.rows.remove(row)
         _save(app, info, merge_list, merge_type)
-        return _out(app, doc_id, info, fields, merge_list)
+        return _out(app, doc_id, info, fields, merge_list, doc)
 
 
 @router.post("/{doc_id}/list/printed", response_model=ListOut)
 def mark_printed(doc_id: str, request: MarkPrinted, app: AppState = Depends(state)) -> ListOut:
     """Mark rows printed (or to print again); without ids, all of them."""
     with _lock:
-        info, _doc, fields, merge_list, merge_type = _read(app, doc_id)
+        info, doc, fields, merge_list, merge_type = _read(app, doc_id)
         if merge_list is None:
-            return _out(app, doc_id, info, fields, merge_list)
+            return _out(app, doc_id, info, fields, merge_list, doc)
         stamp = _now() if request.printed else ""
         for row in merge_list.rows:
             if request.ids is None or row.id in request.ids:
@@ -255,19 +308,19 @@ def mark_printed(doc_id: str, request: MarkPrinted, app: AppState = Depends(stat
                     continue
                 row.printed = stamp
         _save(app, info, merge_list, merge_type)
-        return _out(app, doc_id, info, fields, merge_list)
+        return _out(app, doc_id, info, fields, merge_list, doc)
 
 
 @router.post("/{doc_id}/list/clear-printed", response_model=ListOut)
 def clear_printed(doc_id: str, app: AppState = Depends(state)) -> ListOut:
     """Remove the rows that have been printed."""
     with _lock:
-        info, _doc, fields, merge_list, merge_type = _read(app, doc_id)
+        info, doc, fields, merge_list, merge_type = _read(app, doc_id)
         if merge_list is None:
-            return _out(app, doc_id, info, fields, merge_list)
+            return _out(app, doc_id, info, fields, merge_list, doc)
         merge_list.rows = [row for row in merge_list.rows if not row.printed]
         _save(app, info, merge_list, merge_type)
-        return _out(app, doc_id, info, fields, merge_list)
+        return _out(app, doc_id, info, fields, merge_list, doc)
 
 
 def rows_printed(app: AppState, doc_id: str, ids: tuple[str, ...]) -> None:
