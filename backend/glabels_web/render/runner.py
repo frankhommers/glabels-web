@@ -186,7 +186,15 @@ class Renderer:
             str(work / "document.glabels"),
         ]
 
-    async def rasterize(self, pdf_path: Path, output_path: Path, *, page: int = 1, dpi: int = 96) -> Path:
+    async def rasterize(
+        self,
+        pdf_path: Path,
+        output_path: Path,
+        *,
+        page: int = 1,
+        dpi: int = 96,
+        crop: tuple[int, int, int, int] | None = None,
+    ) -> Path:
         """Turn one page of the PDF into a PNG for display in the browser.
 
         We show the print itself, not a second rendering that might differ:
@@ -196,7 +204,7 @@ class Renderer:
             with tempfile.TemporaryDirectory(prefix="glw-raster-") as tmp:
                 work = Path(tmp)
                 shutil.copyfile(pdf_path, work / "input.pdf")
-                args = self._rasterize_command(work, page=page, dpi=dpi)
+                args = self._rasterize_command(work, page=page, dpi=dpi, crop=crop)
                 log.info("rasterize: %s", " ".join(args))
                 try:
                     proc = await asyncio.create_subprocess_exec(
@@ -224,7 +232,9 @@ class Renderer:
                 shutil.move(str(produced), output_path)
                 return output_path
 
-    def _rasterize_command(self, work: Path, *, page: int, dpi: int) -> list[str]:
+    def _rasterize_command(
+        self, work: Path, *, page: int, dpi: int, crop: tuple[int, int, int, int] | None = None
+    ) -> list[str]:
         options = [
             "-png",
             "-r", str(dpi),
@@ -232,6 +242,11 @@ class Renderer:
             "-l", str(page),
             "-singlefile",
         ]
+        if crop is not None:
+            # Only this part of the page, in pixels at this resolution: one
+            # label out of a sheet.
+            x, y, width, height = crop
+            options += ["-x", str(x), "-y", str(y), "-W", str(width), "-H", str(height)]
         if image := self._settings.batch_docker_image:
             return [
                 "docker", "run", "--rm",

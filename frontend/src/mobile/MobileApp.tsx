@@ -141,6 +141,13 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [printState, setPrintState] = useState<PrintState>({ phase: 'idle' })
   // A label with ${fields} shows its list: rows to add, then print together.
   const [list, setList] = useState<LabelList | null>(null)
+  // The preview: values being typed (after a short pause), a chosen row, or
+  // the whole sheet with its page.
+  const [draft, setDraft] = useState<Record<string, string> | null>(null)
+  const [chosenRow, setChosenRow] = useState<string | null>(null)
+  const [wholeSheet, setWholeSheet] = useState(false)
+  const [sheetPage, setSheetPage] = useState(1)
+  const [sheetPages, setSheetPages] = useState(1)
   const listMode = Boolean(list?.available && list.fields.length > 0)
 
   // Typing saves after a short pause; printing waits for that save.
@@ -177,6 +184,19 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       })
       .catch(() => setPrinterList([]))
   }, [id])
+
+  // How many pages the whole print has, for paging through it.
+  const pendingStamp = list?.rows.filter((row) => !row.printed).map((row) => `${row.id}:${row.copies}`).join(',') ?? ''
+  useEffect(() => {
+    if (!wholeSheet || !detail) return
+    api
+      .previewInfo(detail.id, { ...PREVIEW_SETTINGS, pending_only: true })
+      .then((info) => {
+        setSheetPages(info.pages)
+        setSheetPage((page) => Math.min(page, info.pages))
+      })
+      .catch(() => setSheetPages(1))
+  }, [wholeSheet, detail, pendingStamp])
 
   // The list, kept up to date: other devices add rows too, and a job that
   // completes marks its rows printed.
@@ -311,15 +331,38 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     }
   }, [printState])
 
-  // With a list: the first label still to print; the address changes with
-  // the list, so the picture follows it.
-  const listPreview = listMode && list && list.pending_rows > 0
-  const previewUrl = detail
-    ? listPreview
-      ? `${api.previewImageUrl(detail.id, { ...PREVIEW_SETTINGS, pending_only: true }, 1, 150, detail.revision)}&list=${list?.rows.find((row) => !row.printed && !row.printing)?.id ?? ''}`
-      : api.previewImageUrl(detail.id, PREVIEW_SETTINGS, 1, 150, detail.revision)
-    : ''
-  const preview = useUprightSrc(previewUrl, detail?.content.rotate ?? false)
+  // What the preview shows: one label, cut out of the sheet. With a list:
+  // the values being typed, else the chosen row, else the first still to
+  // print; or the whole sheet as it will print, page by page.
+  const waiting = list?.rows.filter((row) => !row.printed) ?? []
+  const draftShown = draft && Object.values(draft).some((value) => value.trim()) ? draft : null
+  const shownRow =
+    waiting.find((row) => row.id === chosenRow) ?? list?.rows.find((row) => row.id === chosenRow) ?? waiting[0] ?? null
+  const previewUrl = !detail
+    ? ''
+    : listMode && wholeSheet && (list?.pending_rows ?? 0) > 0
+      ? `${api.previewImageUrl(detail.id, { ...PREVIEW_SETTINGS, pending_only: true }, sheetPage, 110, detail.revision)}&list=${waiting.map((row) => `${row.id}:${row.copies}`).join(',')}`
+      : listMode && draftShown
+        ? api.labelImageUrl(detail.id, { values: draftShown, dpi: 150, revision: detail.revision })
+        : listMode && shownRow
+          ? api.labelImageUrl(detail.id, {
+              row: shownRow.id,
+              dpi: 150,
+              revision: detail.revision,
+              stamp: JSON.stringify(shownRow.values),
+            })
+          : api.labelImageUrl(detail.id, { dpi: 150, revision: detail.revision })
+  // A single label is turned back to how it was designed; a whole sheet is
+  // shown as the paper comes out of the printer.
+  const showingSheet = listMode && wholeSheet && (list?.pending_rows ?? 0) > 0
+  const preview = useUprightSrc(previewUrl, !showingSheet && (detail?.content.rotate ?? false))
+  const rowIndex = shownRow ? waiting.indexOf(shownRow) : -1
+  const step = (delta: number) => {
+    if (waiting.length === 0) return
+    const next = waiting[(Math.max(0, rowIndex) + delta + waiting.length) % waiting.length]
+    setChosenRow(next.id)
+    setDraft(null)
+  }
 
   const locked = detail?.limitations.some((limitation) => limitation.blocks_editing) ?? false
   const busy = printState.phase === 'sending' || printState.phase === 'waiting'
@@ -343,9 +386,74 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
               {preview ? <img src={preview} alt={detail.name} /> : null}
               {saving ? <span className="mobile-saving">{t('mobile.saving')}</span> : null}
             </div>
+            {listMode && list && list.rows.length > 0 ? (
+              <div className="mobile-preview-bar">
+                {wholeSheet ? (
+                  <>
+                    <button type="button" aria-label="‹" disabled={sheetPage <= 1} onClick={() => setSheetPage(sheetPage - 1)}>
+                      ‹
+                    </button>
+                    <span>{t('mobile.sheetPage', { page: sheetPage, pages: sheetPages })}</span>
+                    <button
+                      type="button"
+                      aria-label="›"
+                      disabled={sheetPage >= sheetPages}
+                      onClick={() => setSheetPage(sheetPage + 1)}
+                    >
+                      ›
+                    </button>
+                  </>
+                ) : draftShown ? (
+                  <span>{t('mobile.previewTyping')}</span>
+                ) : (
+                  <>
+                    <button type="button" aria-label="‹" disabled={waiting.length < 2} onClick={() => step(-1)}>
+                      ‹
+                    </button>
+                    <span>
+                      {rowIndex >= 0 ? `${rowIndex + 1} / ${waiting.length}` : t('mobile.previewPrinted')}
+                    </span>
+                    <button type="button" aria-label="›" disabled={waiting.length < 2} onClick={() => step(1)}>
+                      ›
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="mobile-link"
+                  disabled={!wholeSheet && list.pending_rows === 0}
+                  onClick={() => {
+                    setWholeSheet(!wholeSheet)
+                    setSheetPage(1)
+                  }}
+                >
+                  {wholeSheet ? t('mobile.oneLabel') : t('mobile.wholeSheet')}
+                </button>
+              </div>
+            ) : null}
 
             {listMode && list ? (
-              <ListPanel docId={detail.id} list={list} onChange={setList} onProblem={setProblem} />
+              <ListPanel
+                docId={detail.id}
+                list={list}
+                chosenRow={shownRow?.id ?? null}
+                onChange={(next) => {
+                  // A row just added is the one to look at.
+                  const added = next.rows.find((row) => !list.rows.some((old) => old.id === row.id))
+                  setList(next)
+                  if (added) {
+                    setChosenRow(added.id)
+                    setWholeSheet(false)
+                  }
+                }}
+                onDraft={setDraft}
+                onChoose={(id) => {
+                  setChosenRow(id)
+                  setDraft(null)
+                  setWholeSheet(false)
+                }}
+                onProblem={setProblem}
+              />
             ) : null}
             {!listMode && texts.length === 0 ? <p className="mobile-note">{t('mobile.noText')}</p> : null}
             {locked ? <p className="mobile-note">{t('mobile.readOnly')}</p> : null}

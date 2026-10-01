@@ -152,6 +152,19 @@ export const api = {
   previewImageUrl: (id: string, settings: PrintSettings, page: number, dpi: number, revision: number) =>
     `/api/documents/${id}/preview.png?${printQuery(settings)}&page=${page}&dpi=${dpi}&rev=${revision}`,
 
+  /** One label, cut out of the page: for a row of the label's list, for
+   *  values still being typed, or as the label stands. */
+  labelImageUrl: (
+    id: string,
+    options: { row?: string; values?: Record<string, string>; dpi: number; revision: number; stamp?: string },
+  ) => {
+    const query = new URLSearchParams({ dpi: String(options.dpi), rev: String(options.revision) })
+    if (options.row) query.set('row', options.row)
+    if (options.values) query.set('values', JSON.stringify(options.values))
+    if (options.stamp) query.set('v', options.stamp)
+    return `/api/documents/${id}/label.png?${query}`
+  },
+
   /** Embed a picture (PNG or SVG) in the document; an image object then
    *  refers to it by the returned name. */
   addImage: (id: string, blob: Blob, filename: string) => {

@@ -190,3 +190,29 @@ def test_only_the_rows_still_to_print_are_printed(client):
     client.post(f"/api/documents/{doc['id']}/list/printed", json={"printed": True})
     nothing = client.get(f"/api/documents/{doc['id']}/preview", params={"copies": 1, "pending_only": True})
     assert (nothing.status_code, nothing.json()["detail"]) == (409, "nothing-to-print")
+
+
+def test_one_label_is_cut_out_of_the_sheet(client):
+    import struct
+
+    def png_size(data: bytes) -> tuple[int, int]:
+        return struct.unpack(">II", data[16:24])
+
+    # Avery 5095: 2 × 4 badges of 3.375 × 2.333 in on a letter sheet.
+    doc = client.post("/api/documents", json={"name": "Badges", "brand": "Avery", "part": "5095"}).json()
+    content = doc["content"]
+    content["objects"] = [{"type": "text", "x_pt": 20, "y_pt": 20, "w_pt": 200, "h_pt": 40, "lines": ["${name}"]}]
+    client.put(f"/api/documents/{doc['id']}", json={"content": content})
+
+    # Values still being typed: the label has no list yet, and shows them all the same.
+    typed = client.get(f"/api/documents/{doc['id']}/label.png", params={"values": '{"name": "Ada"}', "dpi": 72})
+    assert typed.status_code == 200, typed.text
+    assert png_size(typed.content) == (243, 168)  # one badge, not the sheet
+
+    rows = client.post(f"/api/documents/{doc['id']}/list/rows", json={"values": {"name": "Bob"}}).json()["rows"]
+    one = client.get(f"/api/documents/{doc['id']}/label.png", params={"row": rows[0]["id"], "dpi": 72})
+    assert one.status_code == 200 and png_size(one.content) == (243, 168)
+    assert one.content != typed.content  # Bob, not Ada
+    assert client.get(f"/api/documents/{doc['id']}/label.png", params={"row": "nope"}).status_code == 404
+    # The label as it stands, without a row.
+    assert client.get(f"/api/documents/{doc['id']}/label.png", params={"dpi": 72}).status_code == 200

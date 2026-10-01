@@ -9,11 +9,16 @@ reports the job completed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import math
 import threading
+from dataclasses import replace
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from ..documents import Document
@@ -23,7 +28,9 @@ from ..documents.models import BarcodeObject, ImageObject, TextObject
 from ..files import FileAreaError
 from ..files.store import safe_name
 from .deps import AppState, state
-from .routes_documents import _load, _merge_src, _write_through
+from ..render import RenderError
+from ..xml_safe import XmlError
+from .routes_documents import PrintSettings, _load, _merge_src, _write_through
 
 log = logging.getLogger(__name__)
 
@@ -279,3 +286,117 @@ def rows_printed(app: AppState, doc_id: str, ids: tuple[str, ...]) -> None:
                 row.printed = stamp
         _save(app, info, merge_list, merge_type)
         log.info("%d list rows of %s marked printed", len(ids), info.name)
+
+
+def _one_row(values: str | None, row_id: str | None, merge_list) -> dict[str, str] | None:
+    """The record to show: typed values, a row of the list, or none."""
+    if values is not None:
+        try:
+            record = json.loads(values)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="values must be a JSON object") from exc
+        if not isinstance(record, dict) or not all(isinstance(v, str) for v in record.values()):
+            raise HTTPException(status_code=422, detail="values must map field names to text")
+        return {str(k): v for k, v in record.items()}
+    if row_id is not None:
+        row = merge_list.row(row_id) if merge_list else None
+        if row is None:
+            raise HTTPException(status_code=404, detail="unknown row")
+        return row.values
+    return None
+
+
+@router.get("/{doc_id}/label.png")
+async def label_preview(
+    doc_id: str,
+    row: str | None = Query(None, max_length=64),
+    values: str | None = Query(None, max_length=20000),
+    dpi: int = Query(150, ge=24, le=600),
+    app: AppState = Depends(state),
+) -> FileResponse:
+    """One label, cut out of the page: for one row of the list, for values
+    still being typed, or (without either) as the label stands.
+
+    Rendered by the renderer like any print, so it shows what will come out;
+    only the single label is kept, not the sheet around it.
+    """
+    try:
+        info, doc, fields, merge_list, merge_type = _read(app, doc_id)
+    except HTTPException as exc:
+        if exc.detail != "needs-field-names":
+            raise
+        # A source without field names: no list, but the label still shows.
+        info, doc = _load(app, doc_id)
+        fields, merge_list = label_fields(doc), None
+        merge_type = doc.merge().type if doc.merge() else None
+    try:
+        doc.validate_for_render()
+    except XmlError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not app.renderer.available():
+        raise HTTPException(status_code=503, detail="the renderer is not available")
+
+    record = _one_row(values, row, merge_list)
+    app.fonts.refresh_if_changed()
+    folder = app.store.render_path(doc_id, info.revision, "label").parent / "labels"
+    folder.mkdir(parents=True, exist_ok=True)
+
+    source = app.store.revision_path(doc_id, info.revision)
+    merge_source = None
+    key = [str(info.revision), app.fonts.stamp, str(dpi)]
+    if record is not None:
+        # A source with just this record. A label without a list yet gets a
+        # copy linked to it, so the renderer fills in the fields.
+        keys = list(dict.fromkeys([*fields, *record]))
+        one = merge_lists.MergeList(keys=keys, rows=[merge_lists.Row(id="preview", values=record)])
+        data = merge_lists.serialize(one, LIST_TYPE)
+        if merge_type != LIST_TYPE or merge_list is None:
+            doc.set_merge(LIST_TYPE, "preview.tsv")
+            linked = doc.to_bytes()
+            key.append(hashlib.sha256(linked).hexdigest()[:16])
+            source = folder / f"doc-{hashlib.sha256(linked).hexdigest()[:16]}.glabels"
+            if not source.exists():
+                source.write_bytes(linked)
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        merge_source = folder / f"row-{digest}" / "preview.tsv"
+        merge_source.parent.mkdir(exist_ok=True)
+        if not merge_source.exists():
+            merge_source.write_bytes(data)
+        key.append(digest)
+    elif merge_type not in (None, "None") and info.merge_source_path:
+        # As the label stands: with its source, so the first record shows.
+        try:
+            entry = app.files.entry(info.merge_source_path)
+            merge_source = app.files.resolve(info.merge_source_path)
+            key += [entry.modified_at, str(entry.size_bytes)]
+        except FileAreaError:
+            merge_source = None
+
+    name = hashlib.sha256("|".join(key).encode()).hexdigest()[:24]
+    image = folder / f"{name}.png"
+    if not image.exists():
+        pdf = folder / f"{name}.pdf"
+        request = PrintSettings(copies=1).to_request()
+        if merge_source is not None:
+            request = replace(request, merge_source=merge_source)
+        template = app.templates.parse_template_element(doc.template_element)
+        if template is None:
+            raise HTTPException(status_code=422, detail="the document contains no usable product definition")
+        frame = template.frame
+        width, height = frame.bounding_size_pt
+        x0 = frame.layouts[0].x0_pt if frame.layouts else 0.0
+        y0 = frame.layouts[0].y0_pt if frame.layouts else 0.0
+        scale = dpi / 72
+        crop = (
+            math.floor(x0 * scale),
+            math.floor(y0 * scale),
+            max(1, math.ceil(width * scale)),
+            max(1, math.ceil(height * scale)),
+        )
+        try:
+            await app.renderer.render_pdf(source, pdf, request)
+            await app.renderer.rasterize(pdf, image, page=1, dpi=dpi, crop=crop)
+        except RenderError as exc:
+            log.warning("label preview failed for %s: %s", doc_id, exc)
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return FileResponse(image, media_type="image/png", headers={"Cache-Control": "no-cache"})

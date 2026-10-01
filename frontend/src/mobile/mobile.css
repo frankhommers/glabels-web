@@ -101,6 +101,17 @@
 .mobile-list-text span { font-size: 14px; color: var(--text-muted); }
 
 /* ----------------------------------------------------------------- label */
+.mobile-preview-bar { display: flex; align-items: center; gap: 10px; margin-top: -6px; }
+.mobile-preview-bar > span { flex: 1; text-align: center; color: var(--text-muted); font-size: 14px; }
+.mobile-preview-bar > button:not(.mobile-link) {
+  width: 44px;
+  height: 36px;
+  font-size: 20px;
+  color: var(--text);
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
 .mobile-preview {
   position: relative;
   display: flex;
@@ -217,7 +228,19 @@
   border-radius: 8px;
 }
 .mobile-rows.printed li { color: var(--text-muted); }
-.mobile-row-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mobile-row-text {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  overflow-wrap: anywhere;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: none;
+}
+.mobile-rows li.chosen { border-color: var(--highlight); box-shadow: inset 3px 0 0 var(--highlight); }
 .mobile-row-badge {
   flex: none;
   padding: 1px 7px;

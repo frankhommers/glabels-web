@@ -6,19 +6,28 @@
  *  or clear away.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { lists, type LabelList, type ListRow } from '../api/lists'
 import { useT } from '../i18n'
 
 export function ListPanel({
   docId,
   list,
+  chosenRow,
   onChange,
+  onDraft,
+  onChoose,
   onProblem,
 }: {
   docId: string
   list: LabelList
+  /** The row the preview shows. */
+  chosenRow: string | null
   onChange: (list: LabelList) => void
+  /** What is being typed, after a short pause, for the preview; null when empty. */
+  onDraft: (values: Record<string, string> | null) => void
+  /** Show this row in the preview. */
+  onChoose: (row: string) => void
   onProblem: (message: string) => void
 }) {
   const t = useT()
@@ -27,6 +36,14 @@ export function ListPanel({
   const [adding, setAdding] = useState(false)
   const [showPrinted, setShowPrinted] = useState(false)
   const firstField = useRef<HTMLInputElement | null>(null)
+
+  // The preview follows the typing once it pauses, not every key.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      onDraft(Object.values(values).some((value) => value.trim()) ? values : null)
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [values, onDraft])
 
   const run = async (work: () => Promise<LabelList>) => {
     try {
@@ -92,8 +109,10 @@ export function ListPanel({
         {toPrint.length === 0 ? <p className="mobile-note">{t('list.empty')}</p> : null}
         <ul>
           {toPrint.map((row) => (
-            <li key={row.id}>
-              <span className="mobile-row-text">{describe(row)}</span>
+            <li key={row.id} className={row.id === chosenRow ? 'chosen' : undefined}>
+              <button type="button" className="mobile-row-text" onClick={() => onChoose(row.id)}>
+                {describe(row)}
+              </button>
               {row.copies > 1 ? <span className="mobile-row-badge">×{row.copies}</span> : null}
               {row.printing ? <span className="mobile-row-badge">{t('list.printing')}</span> : null}
               <button
@@ -124,8 +143,10 @@ export function ListPanel({
             <>
               <ul>
                 {printed.map((row) => (
-                  <li key={row.id}>
-                    <span className="mobile-row-text">{describe(row)}</span>
+                  <li key={row.id} className={row.id === chosenRow ? 'chosen' : undefined}>
+                    <button type="button" className="mobile-row-text" onClick={() => onChoose(row.id)}>
+                      {describe(row)}
+                    </button>
                     {row.copies > 1 ? <span className="mobile-row-badge">×{row.copies}</span> : null}
                     <button
                       type="button"
