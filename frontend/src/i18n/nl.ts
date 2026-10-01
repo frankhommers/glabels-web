@@ -323,6 +323,10 @@ export const nl: Messages = {
   'objectEditor.offsetX': 'X-verschuiving:',
   'objectEditor.offsetY': 'Y-verschuiving:',
   'objectEditor.opacity': 'Dekking:',
+  'color.standard': 'Standaardkleuren',
+  'color.recent': 'Recente kleuren',
+  'color.hex': 'Kleurcode',
+  'color.system': 'Kleurvenster van het systeem',
   'objectEditor.noColor': 'geen',
 
   // ----------------------------------------------------------------- barcodes

@@ -7,6 +7,7 @@ import { Icon } from '../ui/Icon'
 
 import { fromPt, toPt, type UnitId } from '../editor/units'
 import { useT, type MessageKey } from '../i18n'
+import { ColorPicker } from './ColorPicker'
 
 const BARCODE_STYLES: { backend: string; style: string; label: MessageKey }[] = [
   { backend: 'zint', style: 'code128', label: 'barcode.code128' },
@@ -76,40 +77,8 @@ function Spin({
   )
 }
 
-function ColorButton({
-  value,
-  onChange,
-  allowNone = true,
-}: {
-  value: string
-  onChange: (value: string) => void
-  allowNone?: boolean
-}) {
-  const t = useT()
-  const rgb = value.slice(0, 7)
-  const alpha = value.length === 9 ? Number.parseInt(value.slice(7), 16) : 255
-  return (
-    <span className="color-button">
-      <label className="color-swatch" style={{ background: alpha === 0 ? 'transparent' : rgb }}>
-        <input
-          type="color"
-          value={rgb}
-          onChange={(event) => onChange(`${event.target.value}${alpha.toString(16).padStart(2, '0')}`)}
-        />
-        {alpha === 0 ? <span className="color-none">/</span> : null}
-      </label>
-      {allowNone ? (
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={alpha === 0}
-            onChange={(event) => onChange(`${rgb}${event.target.checked ? '00' : 'ff'}`)}
-          />
-          {t('objectEditor.noColor')}
-        </label>
-      ) : null}
-    </span>
-  )
+function ColorButton(props: { value: string; onChange: (value: string) => void; allowNone?: boolean }) {
+  return <ColorPicker {...props} />
 }
 
 export type ObjectEditorProps = {

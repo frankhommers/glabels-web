@@ -327,6 +327,10 @@ export const en = {
   'objectEditor.offsetX': 'X offset:',
   'objectEditor.offsetY': 'Y offset:',
   'objectEditor.opacity': 'Opacity:',
+  'color.standard': 'Standard colours',
+  'color.recent': 'Recent colours',
+  'color.hex': 'Colour code',
+  'color.system': 'System colour window',
   'objectEditor.noColor': 'none',
 
   // ----------------------------------------------------------------- barcodes
