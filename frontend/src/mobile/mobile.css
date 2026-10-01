@@ -227,6 +227,9 @@
   border: 1px solid var(--highlight);
   border-radius: 8px;
 }
+.mobile-edit-buttons { display: flex; gap: 8px; }
+.mobile-edit-buttons .mobile-add { flex: 1; }
+.mobile-add.secondary { color: var(--text); border-color: var(--border); }
 .mobile-rows ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .mobile-rows li {
   display: flex;

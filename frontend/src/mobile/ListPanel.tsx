@@ -44,13 +44,35 @@ export function ListPanel({
     void run(() => lists.setLines(docId, field, next === list.lines_auto[field] ? 'auto' : next))
   }
 
-  // The preview follows the typing once it pauses, not every key.
+  // A row being changed: the form holds its values until Save or Cancel.
+  const [editing, setEditing] = useState<ListRow | null>(null)
+  const unchanged =
+    editing !== null &&
+    copies === editing.copies &&
+    list.fields.every((field) => (values[field] ?? '') === (editing.values[field] ?? ''))
+
+  // The preview follows the typing once it pauses, not every key. A row
+  // loaded for changing shows as itself until something is changed.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      onDraft(Object.values(values).some((value) => value.trim()) ? values : null)
+      onDraft(!unchanged && Object.values(values).some((value) => value.trim()) ? values : null)
     }, 500)
     return () => window.clearTimeout(timer)
-  }, [values, onDraft])
+  }, [values, onDraft, unchanged])
+
+  const startEditing = (row: ListRow) => {
+    onChoose(row.id)
+    if (row.printing) return
+    setEditing(row)
+    setValues({ ...row.values })
+    setCopies(row.copies)
+  }
+
+  const stopEditing = () => {
+    setEditing(null)
+    setValues({})
+    setCopies(1)
+  }
 
   const run = async (work: () => Promise<LabelList>) => {
     try {
@@ -63,6 +85,12 @@ export function ListPanel({
   const add = async () => {
     if (!Object.values(values).some((value) => value.trim())) return
     setAdding(true)
+    if (editing) {
+      await run(() => lists.change(docId, editing.id, { values, copies }))
+      setAdding(false)
+      stopEditing()
+      return
+    }
     await run(() => lists.add(docId, values, copies))
     setAdding(false)
     setValues({})
@@ -87,7 +115,7 @@ export function ListPanel({
           void add()
         }}
       >
-        <h2>{t('list.addTitle')}</h2>
+        <h2>{editing ? t('list.editTitle') : t('list.addTitle')}</h2>
         {list.fields.map((field, index) => {
           const multi = list.lines[field] === 'multi'
           const last = index === list.fields.length - 1
@@ -146,9 +174,20 @@ export function ListPanel({
             +
           </button>
         </div>
-        <button type="submit" className="mobile-add" disabled={adding}>
-          {t('list.add')}
-        </button>
+        {editing ? (
+          <div className="mobile-edit-buttons">
+            <button type="button" className="mobile-add secondary" onClick={stopEditing}>
+              {t('common.cancel')}
+            </button>
+            <button type="submit" className="mobile-add" disabled={adding || unchanged}>
+              {t('common.save')}
+            </button>
+          </div>
+        ) : (
+          <button type="submit" className="mobile-add" disabled={adding}>
+            {t('list.add')}
+          </button>
+        )}
       </form>
 
       <section className="mobile-rows">
@@ -157,7 +196,7 @@ export function ListPanel({
         <ul>
           {toPrint.map((row) => (
             <li key={row.id} className={row.id === chosenRow ? 'chosen' : undefined}>
-              <button type="button" className="mobile-row-text" onClick={() => onChoose(row.id)}>
+              <button type="button" className="mobile-row-text" onClick={() => startEditing(row)}>
                 {describe(row)}
               </button>
               {row.copies > 1 ? <span className="mobile-row-badge">×{row.copies}</span> : null}
@@ -167,7 +206,10 @@ export function ListPanel({
                 className="mobile-row-button"
                 aria-label={t('common.delete')}
                 disabled={row.printing}
-                onClick={() => void run(() => lists.remove(docId, row.id))}
+                onClick={() => {
+                  if (editing?.id === row.id) stopEditing()
+                  void run(() => lists.remove(docId, row.id))
+                }}
               >
                 ✕
               </button>
@@ -191,7 +233,7 @@ export function ListPanel({
               <ul>
                 {printed.map((row) => (
                   <li key={row.id} className={row.id === chosenRow ? 'chosen' : undefined}>
-                    <button type="button" className="mobile-row-text" onClick={() => onChoose(row.id)}>
+                    <button type="button" className="mobile-row-text" onClick={() => startEditing(row)}>
                       {describe(row)}
                     </button>
                     {row.copies > 1 ? <span className="mobile-row-badge">×{row.copies}</span> : null}

@@ -602,6 +602,7 @@ export const nl: Messages = {
   'list.toPrintShort': 'te printen',
   'list.moreLines': 'Meerdere regels',
   'list.oneLine': 'Eén regel',
+  'list.editTitle': 'Regel aanpassen',
   'list.addTitle': 'Toevoegen aan de lijst',
   'list.add': 'Toevoegen',
   'list.toPrint': { one: 'Te printen: {count} label', other: 'Te printen: {count} labels' },
