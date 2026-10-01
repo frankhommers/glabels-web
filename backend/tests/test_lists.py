@@ -177,3 +177,11 @@ def test_the_merge_preview_hides_the_lists_own_columns(env):
     client.post(f"/api/documents/{doc}/list/rows", json={"values": {"name": "Ada"}})
     preview = client.get(f"/api/documents/{doc}/merge").json()
     assert preview["keys"] == ["name"] and preview["records"] == [{"name": "Ada"}]
+
+
+def test_a_field_used_several_times_is_asked_once(env):
+    client, _state, _printer, _folder = env
+    # The same field on the lid and on two sides, once with a default value.
+    doc = _label(client, "${box}", "${box} – ${contents}", "${box:=spare}")
+    listed = client.get(f"/api/documents/{doc}/list").json()
+    assert listed["fields"] == ["box", "contents"]
