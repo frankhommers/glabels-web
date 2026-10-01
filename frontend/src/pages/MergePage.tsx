@@ -85,9 +85,10 @@ export function MergePage({ session }: { session: Session }) {
     <div className="page-form merge-page">
       <fieldset>
         <legend>{t('merge.source')}</legend>
-        <div className="form-row">
-          <label>{t('merge.type')}</label>
+        {/* One row: the type, the file, and what to do with it. */}
+        <div className="merge-source-bar">
           <select
+            aria-label={t('merge.type')}
             value={mergeType}
             disabled={busy}
             onChange={(event) => void apply(event.target.value, event.target.value === 'None' ? null : sourcePath)}
@@ -101,32 +102,18 @@ export function MergePage({ session }: { session: Session }) {
               </option>
             ))}
           </select>
-        </div>
-        <div className="form-row">
-          <label>{t('merge.file')}</label>
-          <span className="form-static merge-source">
+          <span className="merge-source" title={sourcePath ?? detail.merge?.src ?? ''}>
             {sourcePath ?? detail.merge?.src ?? t('merge.noSource')}
           </span>
+          <button type="button" disabled={busy || mergeType === 'None'} onClick={() => setPicking(true)}>
+            {t('merge.chooseFile')}
+          </button>
+          <button type="button" disabled={busy || !sourcePath} onClick={() => void apply(mergeType, null)}>
+            {t('merge.unlink')}
+          </button>
         </div>
-        <div className="form-row">
-          <label />
-          <span className="button-row">
-            <button type="button" disabled={busy || mergeType === 'None'} onClick={() => setPicking(true)}>
-              {t('merge.chooseFile')}
-            </button>
-            <button
-              type="button"
-              disabled={busy || !sourcePath}
-              onClick={() => void apply(mergeType, null)}
-            >
-              {t('merge.unlink')}
-            </button>
-          </span>
-        </div>
-        {mergeType === 'None' ? (
-          <p className="inline-notice">
-            {t('merge.chooseTypeFirst')}
-          </p>
+        {mergeType === 'None' && !(list?.available && list.fields.length > 0) ? (
+          <p className="inline-notice">{t('merge.chooseTypeFirst')}</p>
         ) : null}
         {problem ? <p className="inline-warning">{problem}</p> : null}
       </fieldset>
@@ -134,45 +121,10 @@ export function MergePage({ session }: { session: Session }) {
       {list?.available && list.fields.length > 0 ? (
         <fieldset>
           <legend>{t('merge.list')}</legend>
-          <p className="muted">
-            {list.source_path ? t('merge.listHint') : t('merge.listNew', { fields: list.fields.join(', ') })}
-          </p>
+          {list.source_path ? null : (
+            <p className="muted">{t('merge.listNew', { fields: list.fields.join(', ') })}</p>
+          )}
           <ListTable docId={detail.id} list={list} onChange={(next) => void listChanged(next)} onProblem={setProblem} />
-        </fieldset>
-      ) : null}
-
-      {list?.available && list.fields.length > 0 ? (
-        <fieldset>
-          <legend>{t('merge.fieldLines')}</legend>
-          <p className="muted">{t('merge.fieldLinesHint')}</p>
-          <div className="field-lines">
-            {list.fields.map((field) => {
-              const auto = list.lines_auto[field] === 'multi' ? t('list.moreLines') : t('list.oneLine')
-              return (
-                <div key={field} className="form-row">
-                  <label htmlFor={`lines-${field}`}>
-                    <code>{'${' + field + '}'}</code>
-                  </label>
-                  <select
-                    id={`lines-${field}`}
-                    value={list.lines_chosen[field] ?? 'auto'}
-                    onChange={async (event) => {
-                      try {
-                        const value = event.target.value as 'auto' | 'multi' | 'single'
-                        await listChanged(await lists.setLines(detail.id, field, value))
-                      } catch (error) {
-                        setProblem(String(error instanceof Error ? error.message : error))
-                      }
-                    }}
-                  >
-                    <option value="auto">{t('merge.linesAuto', { mode: auto })}</option>
-                    <option value="single">{t('list.oneLine')}</option>
-                    <option value="multi">{t('list.moreLines')}</option>
-                  </select>
-                </div>
-              )
-            })}
-          </div>
         </fieldset>
       ) : null}
 

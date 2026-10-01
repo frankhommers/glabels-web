@@ -761,3 +761,19 @@ button.destructive { border-color: #a33; box-shadow: inset 0 0 0 1px #e0b4b4; }
 .list-table .list-copies { width: 70px; }
 .list-table tr.list-printed td input:not([type='checkbox']) { color: var(--text-muted); }
 .list-table tr.list-new td { background: var(--window-alt); }
+
+/* Merge source in one row: type, file, actions. */
+.merge-source-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.merge-source-bar select { max-width: 340px; }
+.merge-source-bar .merge-source {
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.list-status { white-space: nowrap; width: 15.5em; }
+.list-status .tool { min-width: 26px; height: 24px; margin-left: 4px; }
+.list-badge { padding: 1px 7px; border-radius: 10px; background: var(--notice-bg); border: 1px solid var(--notice-border); font-size: 12px; }

@@ -66,7 +66,7 @@ export function ListTable({
                 <th key={key}>{key}</th>
               ))}
               <th className="list-copies">{t('list.copies')}</th>
-              <th>{t('list.status')}</th>
+              <th className="list-status">{t('list.statusColumn')}</th>
               <th />
             </tr>
           </thead>
@@ -176,16 +176,34 @@ function RowEditor({
           }}
         />
       </td>
-      <td>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={Boolean(row.printed)}
-            disabled={row.printing}
-            onChange={(event) => void run(() => lists.change(docId, row.id, { printed: event.target.checked }))}
-          />
-          {row.printing ? t('list.printing') : row.printed ? formatMoment(row.printed) : t('list.toPrintShort')}
-        </label>
+      <td className="list-status">
+        {row.printing ? (
+          <span className="list-badge">{t('list.printing')}</span>
+        ) : row.printed ? (
+          <>
+            <span className="muted">{t('list.printedOn', { when: formatMoment(row.printed) })}</span>
+            <button
+              type="button"
+              className="tool"
+              title={t('list.again')}
+              onClick={() => void run(() => lists.change(docId, row.id, { printed: false }))}
+            >
+              ↺
+            </button>
+          </>
+        ) : (
+          <>
+            <span>{t('list.toPrintShort')}</span>
+            <button
+              type="button"
+              className="tool"
+              title={t('list.markPrinted')}
+              onClick={() => void run(() => lists.change(docId, row.id, { printed: true }))}
+            >
+              ✓
+            </button>
+          </>
+        )}
       </td>
       <td>
         <button

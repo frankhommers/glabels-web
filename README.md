@@ -185,8 +185,10 @@ suits you, from the Merge page or from a phone, and print together later.
   a row on its way to the printer is not printed twice.
 
 A field takes several lines on the phone when its text box has room for two
-lines or more; the ↵ button next to a field changes that, and the choice is
-kept in the label. A line break in a value is stored as `\n`, which gLabels
+lines or more. Change that under **Fields** when the text object is selected
+in the editor, or with the ↵ button next to a field on the phone; the choice
+is kept in the label. On the Merge page, ✓ marks a row printed by hand and ↺
+puts it back on the list. A line break in a value is stored as `\n`, which gLabels
 prints as a new line.
 
 The list is the label's merge source, an ordinary text file with field names

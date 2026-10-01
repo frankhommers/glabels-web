@@ -193,6 +193,8 @@ export function EditorPage({
           />
         </CanvasViewport>
         <ObjectEditor
+          docId={detail.id}
+          revision={detail.revision}
           objects={objects}
           selection={selection}
           unit={unit}

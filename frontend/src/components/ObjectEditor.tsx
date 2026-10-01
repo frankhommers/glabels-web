@@ -8,6 +8,7 @@ import { Icon } from '../ui/Icon'
 import { fromPt, toPt, type UnitId } from '../editor/units'
 import { useT, type MessageKey } from '../i18n'
 import { ColorPicker } from './ColorPicker'
+import { FieldLines } from './FieldLines'
 
 const BARCODE_STYLES: { backend: string; style: string; label: MessageKey }[] = [
   { backend: 'zint', style: 'code128', label: 'barcode.code128' },
@@ -82,6 +83,9 @@ function ColorButton(props: { value: string; onChange: (value: string) => void; 
 }
 
 export type ObjectEditorProps = {
+  /** The open label, for settings kept with it (how fields are filled in). */
+  docId: string
+  revision: number
   objects: DocumentObject[]
   selection: string[]
   unit: UnitId
@@ -89,7 +93,7 @@ export type ObjectEditorProps = {
   onChange: (id: string, patch: Partial<DocumentObject>) => void
 }
 
-export function ObjectEditor({ objects, selection, unit, fontFamilies, onChange }: ObjectEditorProps) {
+export function ObjectEditor({ docId, revision, objects, selection, unit, fontFamilies, onChange }: ObjectEditorProps) {
   const t = useT()
   const selected = objects.filter((object) => object.id && selection.includes(object.id))
   const object = selected.length === 1 ? selected[0] : null
@@ -261,6 +265,7 @@ export function ObjectEditor({ objects, selection, unit, fontFamilies, onChange 
                     onChange={(event) => patch({ lines: event.target.value.split('\n') } as Partial<DocumentObject>)}
                   />
                 </fieldset>
+                <FieldLines docId={docId} text={object.lines.join('\n')} revision={revision} />
               </>
             ) : null}
 
