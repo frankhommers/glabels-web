@@ -167,6 +167,49 @@ export function useSession(t: Translate) {
     [detail, history, t],
   )
 
+  // Another device may change the label meanwhile: a phone adds the first
+  // row of a list (which links a merge source), or edits a text. Pick that
+  // up when this tab is looked at again, and now and then while it is shown;
+  // otherwise the next save here would send an old version back.
+  const shownRef = useRef<{ detail: DocumentDetail | null; editing: boolean }>({ detail: null, editing: false })
+  shownRef.current = { detail, editing: editing !== null }
+  const refresh = useCallback(async () => {
+    const shown = shownRef.current.detail
+    if (!shown || savingRef.current || shownRef.current.editing) return
+    let fresh: DocumentDetail
+    try {
+      fresh = await api.getDocument(shown.id)
+    } catch {
+      return
+    }
+    const now = shownRef.current.detail
+    if (!now || now.id !== fresh.id || savingRef.current) return
+    const stamp = (d: DocumentDetail) =>
+      [d.revision, d.name, d.file_path, d.file_state, JSON.stringify(d.merge)].join('|')
+    if (stamp(fresh) === stamp(now)) return
+    if (dirtyRef.current) {
+      // Edits here not saved yet win for the content; the rest is taken over.
+      setDetail({ ...fresh, content: now.content })
+      return
+    }
+    setDetail(fresh)
+    if (fresh.revision !== now.revision) history.adopt(fresh.content.objects)
+  }, [history])
+
+  useEffect(() => {
+    const look = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    window.addEventListener('focus', look)
+    document.addEventListener('visibilitychange', look)
+    const timer = window.setInterval(look, 15000)
+    return () => {
+      window.removeEventListener('focus', look)
+      document.removeEventListener('visibilitychange', look)
+      window.clearInterval(timer)
+    }
+  }, [refresh])
+
   /** Make sure what is on screen has been saved. */
   const flush = useCallback(async () => {
     if (!dirtyRef.current) return

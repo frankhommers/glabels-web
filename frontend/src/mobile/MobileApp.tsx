@@ -197,6 +197,29 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     }
   }, [id, printState.phase])
 
+  // The label may change on the desktop meanwhile: take that over when the
+  // phone is looked at again, unless something typed here is not saved yet.
+  useEffect(() => {
+    const look = () => {
+      if (document.visibilityState !== 'visible' || dirty.current) return
+      api
+        .getDocument(id)
+        .then((loaded) => {
+          if (dirty.current) return
+          setDetail(loaded)
+          setTexts(textObjects(loaded.content.objects).map((object) => object.lines.join('\n')))
+          setFontsOf(textObjects(loaded.content.objects))
+        })
+        .catch(() => undefined)
+    }
+    window.addEventListener('focus', look)
+    document.addEventListener('visibilitychange', look)
+    return () => {
+      window.removeEventListener('focus', look)
+      document.removeEventListener('visibilitychange', look)
+    }
+  }, [id])
+
   const save = useCallback(async () => {
     const { detail: current, texts: values } = latest.current
     if (!current || !dirty.current) return
