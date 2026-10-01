@@ -6,7 +6,8 @@
  *  colour window for anything else. One click picks a colour and closes.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useT } from '../i18n'
 
 const STANDARD = [
@@ -57,8 +58,27 @@ export function ColorPicker({
   const none = value.length === 9 && value.slice(7) === '00'
   const [hex, setHex] = useState(rgb)
   const wrapper = useRef<HTMLSpanElement | null>(null)
-  // Near the right edge of the window the palette opens to the left.
-  const [toLeft, setToLeft] = useState(false)
+  const popup = useRef<HTMLDivElement | null>(null)
+  // The palette floats above the page, so a panel that clips its contents
+  // cannot cut it off; it stays inside the window, and opens above the
+  // swatch when there is no room below.
+  const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null)
+      return
+    }
+    const anchor = wrapper.current?.getBoundingClientRect()
+    const box = popup.current?.getBoundingClientRect()
+    if (!anchor || !box) return
+    const margin = 8
+    const left = Math.min(Math.max(margin, anchor.left), window.innerWidth - box.width - margin)
+    const below = anchor.bottom + 4
+    const top =
+      below + box.height + margin <= window.innerHeight ? below : Math.max(margin, anchor.top - box.height - 4)
+    setPlace({ left, top })
+  }, [open])
 
   useEffect(() => setHex(rgb), [rgb, open])
 
@@ -66,8 +86,13 @@ export function ColorPicker({
   useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent) => {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      if (!wrapper.current?.contains(target) && !popup.current?.contains(target)) setOpen(false)
     }
+    // Scrolling or resizing would leave it floating in the wrong place.
+    const away = () => setOpen(false)
+    window.addEventListener('resize', away)
+    window.addEventListener('scroll', away, true)
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
@@ -76,6 +101,8 @@ export function ColorPicker({
     return () => {
       window.removeEventListener('pointerdown', outside)
       window.removeEventListener('keydown', escape)
+      window.removeEventListener('resize', away)
+      window.removeEventListener('scroll', away, true)
     }
   }, [open])
 
@@ -87,6 +114,88 @@ export function ColorPicker({
 
   const recent = open ? recentColors() : []
 
+  const palette = (
+    <div
+      ref={popup}
+      className="color-popup"
+      role="dialog"
+      style={place ? { left: place.left, top: place.top } : { visibility: 'hidden', left: 0, top: 0 }}
+    >
+      <div className="color-group">{t('color.standard')}</div>
+      <div className="color-grid">
+        {STANDARD.flat().map((color, index) => (
+          <button
+            key={`${color}-${index}`}
+            type="button"
+            className={!none && color === rgb ? 'color-cell current' : 'color-cell'}
+            style={{ background: color }}
+            title={color}
+            onClick={() => pick(color)}
+          />
+        ))}
+      </div>
+      <div className="color-group">{t('color.recent')}</div>
+      <div className="color-grid">
+        {Array.from({ length: RECENT_COUNT }, (_, index) => recent[index]).map((color, index) =>
+          color ? (
+            <button
+              key={`${color}-${index}`}
+              type="button"
+              className="color-cell"
+              style={{ background: color }}
+              title={color}
+              onClick={() => pick(color)}
+            />
+          ) : (
+            <span key={`empty-${index}`} className="color-cell empty" />
+          ),
+        )}
+      </div>
+      {allowNone ? (
+        <button
+          type="button"
+          className="color-none-button"
+          onClick={() => {
+            onChange(`${rgb}00`)
+            setOpen(false)
+          }}
+        >
+          <span className="color-swatch none small" /> {t('objectEditor.noColor')}
+        </button>
+      ) : null}
+      <form
+        className="color-custom"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const color = normalizeHex(hex)
+          if (color) pick(color)
+        }}
+      >
+        <input
+          value={hex}
+          aria-label={t('color.hex')}
+          spellCheck={false}
+          className={normalizeHex(hex) ? undefined : 'invalid'}
+          onChange={(event) => setHex(event.target.value)}
+        />
+        <button type="submit" disabled={!normalizeHex(hex)}>
+          {t('common.ok')}
+        </button>
+        <label className="color-system" title={t('color.system')}>
+          {/* The system window reports every step while you drag; apply
+              those, and remember the colour once it closes. */}
+          <input
+            type="color"
+            value={rgb}
+            onChange={(event) => onChange(`${event.target.value}ff`)}
+            onBlur={(event) => remember(event.target.value)}
+          />
+          …
+        </label>
+      </form>
+    </div>
+  )
+
   return (
     <span className="color-picker" ref={wrapper}>
       <button
@@ -95,89 +204,10 @@ export function ColorPicker({
         style={none ? undefined : { background: rgb }}
         title={none ? t('objectEditor.noColor') : rgb}
         aria-expanded={open}
-        onClick={() => {
-          const box = wrapper.current?.getBoundingClientRect()
-          setToLeft(Boolean(box && box.left + 250 > window.innerWidth))
-          setOpen(!open)
-        }}
+        onClick={() => setOpen(!open)}
       />
       <span className="color-value">{none ? t('objectEditor.noColor') : rgb}</span>
-      {open ? (
-        <div className={toLeft ? 'color-popup to-left' : 'color-popup'} role="dialog">
-          <div className="color-group">{t('color.standard')}</div>
-          <div className="color-grid">
-            {STANDARD.flat().map((color, index) => (
-              <button
-                key={`${color}-${index}`}
-                type="button"
-                className={!none && color === rgb ? 'color-cell current' : 'color-cell'}
-                style={{ background: color }}
-                title={color}
-                onClick={() => pick(color)}
-              />
-            ))}
-          </div>
-          <div className="color-group">{t('color.recent')}</div>
-          <div className="color-grid">
-            {Array.from({ length: RECENT_COUNT }, (_, index) => recent[index]).map((color, index) =>
-              color ? (
-                <button
-                  key={`${color}-${index}`}
-                  type="button"
-                  className="color-cell"
-                  style={{ background: color }}
-                  title={color}
-                  onClick={() => pick(color)}
-                />
-              ) : (
-                <span key={`empty-${index}`} className="color-cell empty" />
-              ),
-            )}
-          </div>
-          {allowNone ? (
-            <button
-              type="button"
-              className="color-none-button"
-              onClick={() => {
-                onChange(`${rgb}00`)
-                setOpen(false)
-              }}
-            >
-              <span className="color-swatch none small" /> {t('objectEditor.noColor')}
-            </button>
-          ) : null}
-          <form
-            className="color-custom"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const color = normalizeHex(hex)
-              if (color) pick(color)
-            }}
-          >
-            <input
-              value={hex}
-              aria-label={t('color.hex')}
-              spellCheck={false}
-              className={normalizeHex(hex) ? undefined : 'invalid'}
-              onChange={(event) => setHex(event.target.value)}
-            />
-            <button type="submit" disabled={!normalizeHex(hex)}>
-              {t('common.ok')}
-            </button>
-            <label className="color-system" title={t('color.system')}>
-              {/* The system window reports every step while you drag; apply
-                  those, and remember the colour once it closes. */}
-              <input
-                type="color"
-                value={rgb}
-                onChange={(event) => onChange(`${event.target.value}ff`)}
-                onBlur={(event) => remember(event.target.value)}
-              />
-              …
-            </label>
-          </form>
-        </div>
-      ) : null}
+      {open ? createPortal(palette, document.body) : null}
     </span>
   )
 }
