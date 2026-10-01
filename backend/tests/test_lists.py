@@ -185,3 +185,20 @@ def test_a_field_used_several_times_is_asked_once(env):
     doc = _label(client, "${box}", "${box} – ${contents}", "${box:=spare}")
     listed = client.get(f"/api/documents/{doc}/list").json()
     assert listed["fields"] == ["box", "contents"]
+
+
+def test_the_labels_variables_are_not_asked_for(env):
+    client, _state, _printer, _folder = env
+    doc = _label(client, "${box} no. ${counter}")
+    raw = client.get(f"/api/documents/{doc}/file").content.decode()
+    with_counter = raw.replace(
+        "<Data",
+        '<Variables><Variable type="numeric" name="counter" value="1" increment="per_item" stepSize="1"/>'
+        "</Variables>\n  <Data",
+        1,
+    )
+    imported = client.post(
+        "/api/documents/import", files={"file": ("counter.glabels", with_counter.encode(), "application/x-glabels")}
+    ).json()
+    # The counter fills itself in; only the box is a field to fill in.
+    assert client.get(f"/api/documents/{imported['id']}/list").json()["fields"] == ["box"]

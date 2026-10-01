@@ -79,12 +79,17 @@ class MarkPrinted(BaseModel):
 
 
 def label_fields(doc: Document) -> list[str]:
-    """The ${field}s a label uses, in the order of its objects."""
+    """The ${field}s a label uses, in the order of its objects.
+
+    A ${name} can also be one of the label's variables (a counter, say);
+    those fill themselves in and are no field to ask for.
+    """
     names: list[str] = []
+    variables = {variable.name for variable in doc.variables()}
 
     def add(found: list[str]) -> None:
         for name in found:
-            if name not in names:
+            if name not in names and name not in variables:
                 names.append(name)
 
     for obj in doc.content().objects:

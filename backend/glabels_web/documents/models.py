@@ -139,7 +139,8 @@ class VariableSpec(BaseModel):
     type: Literal["numeric", "string"]
     name: str
     value: str
-    increment: Literal["never", "per_copy", "per_merge_record", "per_page"]
+    # As upstream writes them (Variable::idStringToIncrement).
+    increment: Literal["never", "per_item", "per_copy", "per_page"]
     step_size: str
 
 
