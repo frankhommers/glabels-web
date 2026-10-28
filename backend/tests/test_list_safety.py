@@ -79,3 +79,25 @@ def test_a_file_a_list_would_save_with_values_missing_is_no_list(env, text):
 def test_an_empty_cell_past_the_names_is_fine():
     parsed = merge_list.parse(b"Jack\nA\t\n", "Text/Tab/Line1Keys")
     assert [row.values for row in parsed.rows] == [{"Jack": "A"}]
+
+
+def test_a_changed_source_of_the_same_length_gives_another_preview_key(env):
+    import os
+
+    from glabels_web.api.routes_documents import source_snapshot
+
+    client, folder = env
+    doc = _label_with_source(client, folder, "Jack\nRood\n")
+    state = client.app.state.app_state
+    info = state.store.info(doc)
+    path = folder / "merges" / "jacks.tsv"
+    stamp = path.stat().st_mtime
+
+    first, key = source_snapshot(state, doc, info)
+    path.write_text("Jack\nRoos\n")  # same length, same second
+    os.utime(path, (stamp, stamp))
+    second, other = source_snapshot(state, doc, info)
+
+    assert key != other
+    assert first.read_text() == "Jack\nRood\n" and second.read_text() == "Jack\nRoos\n"
+    assert source_snapshot(state, doc, info)[1] == other

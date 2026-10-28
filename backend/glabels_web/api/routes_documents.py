@@ -426,6 +426,9 @@ class PrintSettings(BaseModel):
 
 class PreviewInfo(BaseModel):
     revision: int
+    # Names this exact rendering; put it in the page image's address, so a
+    # browser never shows a picture of an earlier one.
+    key: str
     pages: int
     page_width_pt: float
     page_height_pt: float
@@ -452,6 +455,27 @@ def _pdf_page_size(path: Path) -> tuple[float, float]:
 async def _ensure_pdf(app: AppState, doc_id: str, settings: PrintSettings) -> tuple[DocumentInfo, Path]:
     info, pdf, _rows = await _render(app, doc_id, settings)
     return info, pdf
+
+
+def source_snapshot(app: AppState, doc_id: str, info: DocumentInfo) -> tuple[Path, str]:
+    """The merge source as it is now, copied next to the renders, and a hash
+    of its content for the cache key.
+
+    The content decides, not the modification time: two changes within the
+    same second, or of the same length, still give a new preview. And the
+    renderer reads this copy, so a change made while it renders cannot end up
+    in a preview stored under the hash of the content before.
+    """
+    if not info.merge_source_path:
+        raise FileAreaError("no merge source")
+    data = app.files.read(info.merge_source_path, max_bytes=app.settings.max_upload_bytes)
+    digest = _sha(data)[:16]
+    folder = app.store.render_path(doc_id, info.revision, "source").parent / f"source-{digest}"
+    folder.mkdir(parents=True, exist_ok=True)
+    source = folder / posixpath.basename(info.merge_source_path)
+    if not source.exists():
+        source.write_bytes(data)
+    return source, digest
 
 
 def _pending_source(app: AppState, doc_id: str, info: DocumentInfo, doc: Document) -> tuple[Path, str, list[str]]:
@@ -494,8 +518,8 @@ async def _render(
     if not app.renderer.available():
         raise HTTPException(status_code=503, detail="the renderer is not available")
 
-    # Send the merge source from the shared folder along. Its modification
-    # time is part of the cache key, so an updated CSV gives a new preview.
+    # Send the merge source from the shared folder along. Its content is part
+    # of the cache key, so a changed source gives a new preview.
     merge_source = None
     cache_key = settings.key()
     # The fonts too: a label rendered before its font was added must not
@@ -509,9 +533,8 @@ async def _render(
         cache_key = f"{cache_key}|list:{digest}"
     elif spec is not None and spec.type != "None" and info.merge_source_path:
         try:
-            entry = app.files.entry(info.merge_source_path)
-            merge_source = app.files.resolve(info.merge_source_path)
-            cache_key = f"{cache_key}|{info.merge_source_path}|{entry.modified_at}|{entry.size_bytes}"
+            merge_source, digest = source_snapshot(app, doc_id, info)
+            cache_key = f"{cache_key}|{info.merge_source_path}|{digest}"
         except FileAreaError as exc:
             raise HTTPException(
                 status_code=422,
@@ -577,7 +600,7 @@ async def preview_info(
     info, pdf = await _ensure_pdf(app, doc_id, settings)
     width, height = _pdf_page_size(pdf)
     return PreviewInfo(
-        revision=info.revision, pages=_pdf_pages(pdf), page_width_pt=width, page_height_pt=height
+        revision=info.revision, key=pdf.stem, pages=_pdf_pages(pdf), page_width_pt=width, page_height_pt=height
     )
 
 

@@ -30,7 +30,7 @@ from ..files.store import safe_name
 from .deps import AppState, state
 from ..render import RenderError
 from ..xml_safe import XmlError
-from .routes_documents import PrintSettings, _load, _merge_src, _write_through
+from .routes_documents import PrintSettings, _load, _merge_src, _write_through, source_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -379,7 +379,7 @@ async def label_preview(
     try:
         info, doc, fields, merge_list, merge_type = _read(app, doc_id)
     except HTTPException as exc:
-        if exc.detail != "needs-field-names":
+        if exc.detail not in ("needs-field-names", "columns-without-name"):
             raise
         # A source without field names: no list, but the label still shows.
         info, doc = _load(app, doc_id)
@@ -422,9 +422,8 @@ async def label_preview(
     elif merge_type not in (None, "None") and info.merge_source_path:
         # As the label stands: with its source, so the first record shows.
         try:
-            entry = app.files.entry(info.merge_source_path)
-            merge_source = app.files.resolve(info.merge_source_path)
-            key += [entry.modified_at, str(entry.size_bytes)]
+            merge_source, digest = source_snapshot(app, doc_id, info)
+            key.append(digest)
         except FileAreaError:
             merge_source = None
 

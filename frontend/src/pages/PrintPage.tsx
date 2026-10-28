@@ -490,7 +490,8 @@ export function PrintPage({ session, template }: { session: Session; template: T
           {info ? (
             <img
               className={landscape ? 'preview-sheet landscape' : 'preview-sheet'}
-              src={`${api.previewImageUrl(detail.id, printSettings, page, 110, detail.revision)}${listStamp ? `&list=${encodeURIComponent(listStamp)}` : ''}`}
+              // The key names this rendering: a changed source never shows an old picture.
+              src={`${api.previewImageUrl(detail.id, printSettings, page, 110, detail.revision)}&v=${info.key}`}
               alt={t('print.page', { number: page, total: info?.pages ?? '–' })}
             />
           ) : (

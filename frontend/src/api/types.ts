@@ -238,6 +238,8 @@ export type PrintSettings = {
 
 export type PreviewInfo = {
   revision: number
+  /** Names this exact rendering; part of the page image's address. */
+  key: string
   pages: number
   page_width_pt: number
   page_height_pt: number
