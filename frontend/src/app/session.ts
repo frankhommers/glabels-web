@@ -120,6 +120,7 @@ export function useSession(t: Translate) {
         const saved = await api.saveDocument(detail.id, {
           rotate: detail.content.rotate,
           objects: sent,
+          length_pt: detail.content.length_pt,
         })
         setDetail(saved)
 
@@ -263,6 +264,24 @@ export function useSession(t: Translate) {
     [detail, markDirty],
   )
 
+  /** The length of a label on a roll (tape), within what the roll allows,
+   *  like the Length field upstream. */
+  const setLength = useCallback(
+    (points: number) => {
+      if (!detail || detail.content.length_pt == null) return
+      const low = detail.label_min_length_pt ?? 1
+      const high = detail.label_max_length_pt || Number.POSITIVE_INFINITY
+      const length = Math.min(high, Math.max(low, points))
+      if (Math.abs(length - detail.content.length_pt) < 1e-6) return
+      const next = { ...detail, label_height_pt: length, content: { ...detail.content, length_pt: length } }
+      setDetail(next)
+      const size = labelSize(next)
+      setZoom(fitZoom(size.w, size.h))
+      markDirty()
+    },
+    [detail, markDirty],
+  )
+
   const commit = useCallback(
     (next: DocumentObject[]) => {
       history.commit(next)
@@ -318,6 +337,7 @@ export function useSession(t: Translate) {
     detail,
     setDetail,
     setOrientation,
+    setLength,
     rename,
     objects: history.present,
     history,

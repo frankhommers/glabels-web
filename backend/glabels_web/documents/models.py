@@ -169,6 +169,9 @@ class DocumentContent(BaseModel):
 
     rotate: bool = False
     objects: list[DocumentObject] = Field(default_factory=list)
+    # Length of a label on a continuous roll (tape), chosen per document like
+    # the Length field in gLabels' Properties. None: not a roll, or unchanged.
+    length_pt: float | None = None
 
 
 class DocumentInfo(BaseModel):
@@ -209,6 +212,9 @@ class DocumentDetail(DocumentInfo):
     label_round_pt: float = 0.0
     label_radius_pt: float | None = None
     label_hole_pt: float | None = None
+    # A continuous roll: the shortest and longest label it allows.
+    label_min_length_pt: float | None = None
+    label_max_length_pt: float | None = None
     markups: list[dict] = Field(default_factory=list)
     content: DocumentContent
     merge: MergeSpec | None = None

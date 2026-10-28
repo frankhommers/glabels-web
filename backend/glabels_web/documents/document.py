@@ -279,6 +279,34 @@ class Document:
     def rotate(self) -> bool:
         return _bool_attr(self.objects_element, "rotate", False)
 
+    @property
+    def _continuous(self) -> etree._Element | None:
+        """The label of a continuous roll (tape), if this is one."""
+        template = self._root.find("Template")
+        return None if template is None else template.find("Label-continuous")
+
+    @property
+    def length_pt(self) -> float | None:
+        """The chosen length of a label on a roll; upstream keeps it in the
+        `height` of the embedded template, the default being `default_height`."""
+        node = self._continuous
+        if node is None:
+            return None
+        default = _length_attr(node, "default_height", 0.0)
+        return _length_attr(node, "height", 0.0) or default or None
+
+    def set_length(self, points: float) -> None:
+        """Set the length, kept between the roll's minimum and maximum."""
+        node = self._continuous
+        if node is None:
+            return
+        low = _length_attr(node, "min_height", 0.0)
+        high = _length_attr(node, "max_height", 0.0)
+        if high > 0:
+            points = min(points, high)
+        points = max(points, low, 1.0)
+        node.set("height", format_length(points, "mm"))
+
     def embedded_files(self) -> list[EmbeddedFile]:
         files = []
         for data_node in self._root.findall("Data"):
@@ -330,6 +358,7 @@ class Document:
         return DocumentContent(
             rotate=self.rotate,
             objects=[self._read_object(oid, el) for oid, el in self._object_elements()],
+            length_pt=self.length_pt,
         )
 
     def limitations(self) -> list[Limitation]:
@@ -452,6 +481,8 @@ class Document:
         """
         objects_el = self.objects_element
         _set_bool(objects_el, "rotate", content.rotate)
+        if content.length_pt is not None:
+            self.set_length(content.length_pt)
 
         existing = dict(self._object_elements())
         taken = set(existing)

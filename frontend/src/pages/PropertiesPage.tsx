@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import type { Session } from '../app/session'
-import { formatLength, UNIT_IDS, type UnitId } from '../editor/units'
+import { formatLength, fromPt, toPt, UNIT_IDS, type UnitId } from '../editor/units'
 import { SheetPreview } from '../components/SelectProductDialog'
 import type { Template } from '../api/types'
 import { canRotate, orientationOf, type Orientation } from '../editor/label'
@@ -66,6 +67,26 @@ export function PropertiesPage({
         </div>
       </fieldset>
 
+      {detail.content.length_pt != null ? (
+        <fieldset>
+          <legend>{t('properties.tape')}</legend>
+          <LengthField
+            key={detail.id}
+            label={t('properties.length')}
+            points={detail.content.length_pt}
+            unit={unit}
+            unitName={t(`unit.${unit}`)}
+            onChange={session.setLength}
+          />
+          <p className="muted">
+            {t('properties.lengthHint', {
+              min: size(detail.label_min_length_pt ?? 0),
+              max: size(detail.label_max_length_pt ?? 0),
+            })}
+          </p>
+        </fieldset>
+      ) : null}
+
       <fieldset>
         <legend>{t('properties.orientation')}</legend>
         <div className="form-row">
@@ -107,6 +128,58 @@ export function PropertiesPage({
           <SheetPreview template={template} />
         </fieldset>
       ) : null}
+    </div>
+  )
+}
+
+/** The length of a tape label. Typed freely and applied on Enter or when
+ *  leaving the field, so typing "120" does not pass through 1 and 12. */
+function LengthField({
+  label,
+  points,
+  unit,
+  unitName,
+  onChange,
+}: {
+  label: string
+  points: number
+  unit: UnitId
+  unitName: string
+  onChange: (points: number) => void
+}) {
+  const [text, setText] = useState(formatLength(points, unit))
+  // A new length from elsewhere (kept within the roll, saved, another unit)
+  // replaces what the field shows.
+  const [shown, setShown] = useState({ points, unit })
+  if (shown.points !== points || shown.unit !== unit) {
+    setShown({ points, unit })
+    setText(formatLength(points, unit))
+  }
+  const apply = (raw = text) => {
+    const value = Number.parseFloat(raw.replace(',', '.'))
+    if (Number.isFinite(value) && value > 0) onChange(toPt(value, unit))
+    else setText(formatLength(points, unit))
+  }
+  return (
+    <div className="form-row">
+      <label>{label}</label>
+      <span className="spin">
+        <input
+          type="number"
+          value={text}
+          step={unit === 'mm' ? 1 : fromPt(1, unit) < 0.1 ? 0.01 : 0.1}
+          onChange={(event) => {
+            setText(event.target.value)
+            // The arrows of the field apply right away; typing waits.
+            if (!(event.nativeEvent instanceof InputEvent)) apply(event.target.value)
+          }}
+          onBlur={() => apply()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') apply()
+          }}
+        />
+        <span className="spin-suffix">{unitName}</span>
+      </span>
     </div>
   )
 }

@@ -114,6 +114,8 @@ def _detail(app: AppState, info: DocumentInfo, doc: Document) -> DocumentDetail:
         label_round_pt=frame.round_pt or 0.0,
         label_radius_pt=frame.radius_pt,
         label_hole_pt=frame.hole_pt,
+        label_min_length_pt=frame.min_height_pt if frame.shape == "continuous" else None,
+        label_max_length_pt=frame.max_height_pt if frame.shape == "continuous" else None,
         markups=[m.model_dump() for m in frame.markups],
         content=content,
         merge=merge,

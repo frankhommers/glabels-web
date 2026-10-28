@@ -85,7 +85,12 @@ export type DocumentObject =
   | BarcodeObject
   | UnsupportedObject
 
-export type DocumentContent = { rotate: boolean; objects: DocumentObject[] }
+export type DocumentContent = {
+  rotate: boolean
+  objects: DocumentObject[]
+  /** Length of a label on a continuous roll (tape); absent for other labels. */
+  length_pt?: number | null
+}
 
 export type Limitation = {
   code: string
@@ -141,6 +146,9 @@ export type DocumentDetail = DocumentInfo & {
   label_round_pt: number
   label_radius_pt?: number | null
   label_hole_pt?: number | null
+  /** A continuous roll: the shortest and longest label it allows. */
+  label_min_length_pt?: number | null
+  label_max_length_pt?: number | null
   markups: Markup[]
   content: DocumentContent
   merge?: MergeSpec | null

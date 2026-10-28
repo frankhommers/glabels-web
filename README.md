@@ -32,6 +32,8 @@ project.
   preview or print. Every save is a revision; unchanged content does not make
   a new one.
 - Designing labels horizontally or vertically (Properties ▸ Orientation).
+- Choosing the length of a label on a continuous roll, such as Brother DK
+  tape (Properties ▸ Tape), within what the roll allows.
 - Print preview: a rasterisation of exactly the PDF that gets printed, made by
   `glabels-batch-qt` from the same pinned upstream source.
 - Adding user fonts; they are used both on the canvas and by the renderer.
@@ -268,7 +270,7 @@ is the source is also kept in SQLite.
 ### Editing a data file
 
 A `.csv`, `.tsv` or `.txt` file opens as a table: double-click it on the Files
-page (or select it and choose **Edit table…**), or use **Edit…** next to the
+page (or select it and choose **Edit table…** in the toolbar), or use **Edit…** next to the
 source on the Merge page.
 
 - Type in a cell to change it; **Shift+Enter** starts a new line in a cell.

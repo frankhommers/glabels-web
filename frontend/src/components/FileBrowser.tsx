@@ -4,7 +4,7 @@
  *  exactly the same and look the same.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { files, formatBytes, type DirectoryListing, type FileEntry, type FileKind } from '../api/files'
 import { formatMoment } from '../app/locale'
 import { useDialogs } from '../ui/dialogs'
@@ -122,6 +122,8 @@ export type FileBrowserProps = {
   onProjects?: () => void
   /** Called with the folder that is open after every navigation. */
   onNavigate?: (path: string) => void
+  /** Buttons for the selected file, at the end of the toolbar. */
+  actions?: ReactNode
 }
 
 export function FileBrowser({
@@ -133,6 +135,7 @@ export function FileBrowser({
   onChanged,
   onProjects,
   onNavigate,
+  actions,
 }: FileBrowserProps) {
   const t = useT()
   const dialogs = useDialogs()
@@ -396,6 +399,12 @@ export function FileBrowser({
               {t('common.download')}
             </button>
           )}
+          {actions ? (
+            <>
+              <span className="toolbar-separator" />
+              {actions}
+            </>
+          ) : null}
         </div>
 
         {listing && !listing.available ? (

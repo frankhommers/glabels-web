@@ -52,16 +52,6 @@ export function FilesPage({
         <p className="muted">
           {t('files.intro', { folder: filesDir ? ` — ${filesDir}` : '' })}
         </p>
-        {entry?.kind === 'document' ? (
-          <button type="button" className="default" onClick={() => void openDocument(entry.path)}>
-            {t('files.openAsProject')}
-          </button>
-        ) : null}
-        {entry?.kind === 'data' ? (
-          <button type="button" className="default" onClick={() => setTable(entry.path)}>
-            {t('table.edit')}
-          </button>
-        ) : null}
       </div>
 
       {problem ? <p className="inline-warning">{problem}</p> : null}
@@ -94,6 +84,17 @@ export function FilesPage({
           onNavigate={(path) => {
             lastPath.current = path
           }}
+          actions={
+            entry?.kind === 'document' ? (
+              <button type="button" className="default" onClick={() => void openDocument(entry.path)}>
+                {t('files.openAsProject')}
+              </button>
+            ) : entry?.kind === 'data' ? (
+              <button type="button" className="default" onClick={() => setTable(entry.path)}>
+                {t('table.edit')}
+              </button>
+            ) : null
+          }
           selected={selected}
           onSelect={(path, item) => {
             setSelected(path)
