@@ -195,6 +195,8 @@ export function EditorPage({
         <ObjectEditor
           docId={detail.id}
           revision={detail.revision}
+          mergeSource={`${detail.merge?.type ?? ''}|${detail.merge?.source_path ?? ''}`}
+          variables={detail.variables.map((variable) => variable.name)}
           objects={objects}
           selection={selection}
           unit={unit}

@@ -1,7 +1,8 @@
 /** Object properties, with the same tabs and groups as the desktop app:
  *  Text, Barcode, Image, Line/Fill, Position/Size and Shadow. */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { api } from '../api/client'
 import type { DocumentObject } from '../api/types'
 import { Icon } from '../ui/Icon'
 
@@ -86,6 +87,10 @@ export type ObjectEditorProps = {
   /** The open label, for settings kept with it (how fields are filled in). */
   docId: string
   revision: number
+  /** Changes when another merge source is chosen; the fields are read again. */
+  mergeSource: string
+  /** Names of the label's variables; they go in a text like a field. */
+  variables: string[]
   objects: DocumentObject[]
   selection: string[]
   unit: UnitId
@@ -93,8 +98,21 @@ export type ObjectEditorProps = {
   onChange: (id: string, patch: Partial<DocumentObject>) => void
 }
 
-export function ObjectEditor({ docId, revision, objects, selection, unit, fontFamilies, onChange }: ObjectEditorProps) {
+export function ObjectEditor({
+  docId,
+  revision,
+  mergeSource,
+  variables,
+  objects,
+  selection,
+  unit,
+  fontFamilies,
+  onChange,
+}: ObjectEditorProps) {
   const t = useT()
+  const fields = useMergeFields(docId, mergeSource)
+  const textArea = useRef<HTMLTextAreaElement | null>(null)
+  const dataInput = useRef<HTMLInputElement | null>(null)
   const selected = objects.filter((object) => object.id && selection.includes(object.id))
   const object = selected.length === 1 ? selected[0] : null
   const tabs = tabsFor(object)
@@ -259,7 +277,15 @@ export function ObjectEditor({ docId, revision, objects, selection, unit, fontFa
 
                 <fieldset>
                   <legend>{t('objectEditor.text')}</legend>
+                  <InsertField
+                    fields={fields}
+                    variables={variables}
+                    onInsert={(code) =>
+                      patch({ lines: insertAtCursor(textArea.current, object.lines.join('\n'), code).split('\n') } as Partial<DocumentObject>)
+                    }
+                  />
                   <textarea
+                    ref={textArea}
                     rows={6}
                     value={object.lines.join('\n')}
                     onChange={(event) => patch({ lines: event.target.value.split('\n') } as Partial<DocumentObject>)}
@@ -312,7 +338,12 @@ export function ObjectEditor({ docId, revision, objects, selection, unit, fontFa
                 </fieldset>
                 <fieldset>
                   <legend>{t('objectEditor.barcodeData')}</legend>
-                  <input value={object.data} onChange={(event) => patch({ data: event.target.value } as Partial<DocumentObject>)} />
+                  <InsertField
+                    fields={fields}
+                    variables={variables}
+                    onInsert={(code) => patch({ data: insertAtCursor(dataInput.current, object.data, code) } as Partial<DocumentObject>)}
+                  />
+                  <input ref={dataInput} value={object.data} onChange={(event) => patch({ data: event.target.value } as Partial<DocumentObject>)} />
                   <p className="inline-notice">{t('objectEditor.barcodeHint')}</p>
                 </fieldset>
               </>
@@ -431,5 +462,89 @@ export function ObjectEditor({ docId, revision, objects, selection, unit, fontFa
         </>
       )}
     </div>
+  )
+}
+
+/** Our own list columns; a label does not use them. */
+const LIST_COLUMNS = new Set(['_id', '_copies', '_printed'])
+
+/** The fields of the label's merge source, read again when another source
+ *  is chosen. */
+function useMergeFields(docId: string, mergeSource: string): string[] {
+  const [fields, setFields] = useState<string[]>([])
+  useEffect(() => {
+    let current = true
+    api
+      .mergePreview(docId)
+      .then((preview) => {
+        if (current) setFields(preview.keys.filter((key) => !LIST_COLUMNS.has(key)))
+      })
+      .catch(() => {
+        if (current) setFields([])
+      })
+    return () => {
+      current = false
+    }
+  }, [docId, mergeSource])
+  return fields
+}
+
+/** Put `code` where the cursor is in a text field (at the end when it has
+ *  none), and keep the cursor just after it. */
+function insertAtCursor(element: HTMLTextAreaElement | HTMLInputElement | null, text: string, code: string): string {
+  const start = element?.selectionStart ?? text.length
+  const end = element?.selectionEnd ?? start
+  const next = text.slice(0, start) + code + text.slice(end)
+  requestAnimationFrame(() => {
+    if (!element) return
+    element.focus()
+    element.setSelectionRange(start + code.length, start + code.length)
+  })
+  return next
+}
+
+/** "Insert field": the fields of the merge source and the variables, put
+ *  in as ${name}, like the button in gLabels' object editor. */
+function InsertField({
+  fields,
+  variables,
+  onInsert,
+}: {
+  fields: string[]
+  variables: string[]
+  onInsert: (code: string) => void
+}) {
+  const t = useT()
+  const empty = fields.length === 0 && variables.length === 0
+  return (
+    <select
+      className="insert-field"
+      value=""
+      disabled={empty}
+      title={empty ? t('objectEditor.noFieldsHint') : undefined}
+      onChange={(event) => {
+        if (event.target.value) onInsert('${' + event.target.value + '}')
+      }}
+    >
+      <option value="">{t(empty ? 'objectEditor.noFields' : 'objectEditor.insertField')}</option>
+      {fields.length > 0 ? (
+        <optgroup label={t('objectEditor.mergeFields')}>
+          {fields.map((name) => (
+            <option key={`f:${name}`} value={name}>
+              {name}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {variables.length > 0 ? (
+        <optgroup label={t('objectEditor.variables')}>
+          {variables.map((name) => (
+            <option key={`v:${name}`} value={name}>
+              {name}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+    </select>
   )
 }

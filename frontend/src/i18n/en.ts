@@ -298,6 +298,11 @@ export const en = {
   'objectEditor.italic': 'Italic',
   'objectEditor.underline': 'Underline',
   'objectEditor.color': 'Colour:',
+  'objectEditor.insertField': 'Insert field…',
+  'objectEditor.noFields': 'No fields to insert',
+  'objectEditor.noFieldsHint': 'Choose a merge source on the Merge page, or add a variable.',
+  'objectEditor.mergeFields': 'Merge fields',
+  'objectEditor.variables': 'Variables',
   'objectEditor.text': 'Text',
   'objectEditor.fontMissing':
     'The renderer does not have {family}. Printing will use a different font and the layout will differ. Add the font through Edit ▸ Fonts…, or pick one from the list.',

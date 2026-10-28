@@ -41,6 +41,8 @@ project.
   saving `.glabels` files, and managing fonts.
 - Merging with CSV and tab separated files, including a field overview, a data
   preview and the merge controls when printing.
+- Insert field… in the object editor puts a field of the merge source or a
+  variable (`${name}`) into a text or barcode at the cursor.
 - Editing a merge source as a table, like a small spreadsheet. See *Editing a
   data file* below.
 - Lists: rows added from the desktop or a phone and printed together later,

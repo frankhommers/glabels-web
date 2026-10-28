@@ -294,6 +294,11 @@ export const nl: Messages = {
   'objectEditor.italic': 'Cursief',
   'objectEditor.underline': 'Onderstreept',
   'objectEditor.color': 'Kleur:',
+  'objectEditor.insertField': 'Veld invoegen…',
+  'objectEditor.noFields': 'Geen velden om in te voegen',
+  'objectEditor.noFieldsHint': 'Kies een merge-bron op de Merge-pagina, of maak een variabele.',
+  'objectEditor.mergeFields': 'Merge-velden',
+  'objectEditor.variables': 'Variabelen',
   'objectEditor.text': 'Tekst',
   'objectEditor.fontMissing':
     'De renderer heeft {family} niet. Bij afdrukken wordt een ander lettertype gebruikt en wijkt de opmaak af. Voeg het lettertype toe via Bewerken ▸ Lettertypen…, of kies er een uit de lijst.',
