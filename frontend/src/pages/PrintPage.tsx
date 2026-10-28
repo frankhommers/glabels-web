@@ -42,6 +42,9 @@ function jobStatus(t: Translate, job: PrintJob): string {
   return key ? t(key) : t('common.unknown')
 }
 
+/** The printer this browser chose last. */
+const PRINTER_KEY = 'glabels-web.printer'
+
 export function PrintPage({ session, template }: { session: Session; template: Template | null }) {
   const t = session.t
   const dialogs = useDialogs()
@@ -56,7 +59,13 @@ export function PrintPage({ session, template }: { session: Session; template: T
   const [problem, setProblem] = useState<string | null>(null)
   const [mode, setMode] = useState<'sheets' | 'positions'>(printSettings.sheets ? 'sheets' : 'positions')
   const [printerList, setPrinterList] = useState<PrinterList | null>(null)
-  const [printer, setPrinter] = useState<string>('')
+  // The printer chosen last in this browser, also after leaving this page;
+  // the phone remembers its own the same way.
+  const [printer, setPrinterState] = useState<string>(() => window.localStorage.getItem(PRINTER_KEY) ?? '')
+  const setPrinter = (name: string) => {
+    setPrinterState(name)
+    window.localStorage.setItem(PRINTER_KEY, name)
+  }
   const [managing, setManaging] = useState(false)
   const [jobs, setJobs] = useState<PrintJob[]>([])
   const [printing, setPrinting] = useState(false)
@@ -72,7 +81,8 @@ export function PrintPage({ session, template }: { session: Session; template: T
     try {
       const result = await printerApi.list()
       setPrinterList(result)
-      setPrinter((current) => {
+      // The one chosen before, as long as it still exists; otherwise the default.
+      setPrinterState((current) => {
         if (current && result.printers.some((item) => item.name === current)) return current
         return result.printers.find((item) => item.is_default)?.name ?? result.printers[0]?.name ?? ''
       })
