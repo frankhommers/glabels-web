@@ -44,7 +44,7 @@ class AppState:
             len(templates.brands()),
         )
         store = DocumentStore(settings.database_path, settings.documents_dir)
-        files = FileArea(Path(settings.files_dir))
+        files = FileArea(Path(settings.files_dir), Path(settings.data_dir) / "file-history")
         files.ensure()
         # The fonts folder is part of the shared folder; make sure it exists,
         # so there is something to fill right away.

@@ -55,8 +55,9 @@ class RowOut(BaseModel):
 
 class ListOut(BaseModel):
     available: bool
-    # Why there is no list: "no-fields" (the label has no ${field}) or
-    # "needs-field-names" (the source has no field names on line 1).
+    # Why there is no list: "no-fields" (the label has no ${field}),
+    # "needs-field-names" (the source has no field names on line 1) or
+    # "columns-without-name" (saving it as a list would drop values).
     reason: str | None = None
     source_path: str | None = None
     # The fields the label uses, in the order they appear on it.
@@ -161,6 +162,8 @@ def _read(app: AppState, doc_id: str):
         return info, doc, fields, merge_lists.parse(raw, spec.type), spec.type
     except FileAreaError as exc:
         raise HTTPException(status_code=422, detail=f"the merge source is not available: {exc}") from exc
+    except merge_lists.ListShapeError as exc:
+        raise HTTPException(status_code=409, detail="columns-without-name") from exc
     except merge_backends.MergeError as exc:
         raise HTTPException(status_code=409, detail="needs-field-names") from exc
 
@@ -224,8 +227,8 @@ def get_list(doc_id: str, app: AppState = Depends(state)) -> ListOut:
     try:
         info, doc, fields, merge_list, _type = _read(app, doc_id)
     except HTTPException as exc:
-        if exc.detail == "needs-field-names":
-            return ListOut(available=False, reason="needs-field-names")
+        if exc.detail in ("needs-field-names", "columns-without-name"):
+            return ListOut(available=False, reason=exc.detail)
         raise
     return _out(app, doc_id, info, fields, merge_list, doc)
 

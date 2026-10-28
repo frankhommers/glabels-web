@@ -15,7 +15,7 @@ export type ListRow = {
 
 export type LabelList = {
   available: boolean
-  reason?: 'no-fields' | 'needs-field-names' | null
+  reason?: 'no-fields' | 'needs-field-names' | 'columns-without-name' | null
   source_path?: string | null
   /** The fields the label uses. */
   fields: string[]

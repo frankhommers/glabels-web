@@ -18,6 +18,7 @@ field name.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -79,20 +80,48 @@ def _copies(value: str) -> int:
         return 1
 
 
+class ListShapeError(MergeError):
+    """The file has data a list would drop when it saves: a column without a
+    name, two columns with the same name, or values past the last name."""
+
+
+def _check_shape(header: list[str], rows: list[list[str]]) -> None:
+    named = [name for name in header if name]
+    if len(set(named)) != len(named):
+        raise ListShapeError("two columns have the same name")
+    for values in rows:
+        for index, value in enumerate(values):
+            if value and (index >= len(header) or not header[index]):
+                raise ListShapeError("a column with values has no name")
+
+
+def line_id(index: int, values: list[str]) -> str:
+    """The id of a row that has none in the file yet.
+
+    The same every time the file is read, so a change made on one screen
+    finds the row again; built from the row's place and its content, so a
+    row that moved or changed in the meantime is not found rather than
+    another row changed. The id is written to the file at the next save.
+    """
+    digest = hashlib.sha1("\x1f".join(values).encode("utf-8")).hexdigest()[:6]
+    return f"n{index}{digest}"
+
+
 def parse(data: bytes, merge_type: str) -> MergeList:
-    """Read a source as a list; rows without an id get one."""
+    """Read a source as a list; rows without an id get a stable one."""
     delimiter = _delimiter(merge_type)
     lines = parse_text(data.decode("utf-8-sig", errors="replace"), delimiter)
     if not lines:
         return MergeList(keys=[])
     header = [name.strip() for name in lines[0]]
+    _check_shape(header, lines[1:])
     keys = [name for name in header if name and name not in META]
     rows = []
-    for values in lines[1:]:
+    for index, values in enumerate(lines[1:], start=1):
         record = {header[i]: value for i, value in enumerate(values) if i < len(header) and header[i]}
         rows.append(
             Row(
-                id=record.get(ID) or new_id(),
+                id=record.get(ID) or line_id(index, values),
                 values={key: record.get(key, "") for key in keys},
                 copies=_copies(record.get(COPIES, "1")),
                 printed=record.get(PRINTED, ""),

@@ -193,15 +193,34 @@ suits you, from the Merge page or from a phone, and print together later.
 A field takes several lines on the phone when its text box has room for two
 lines or more. Change that under **Fields** when the text object is selected
 in the editor, or with the ↵ button next to a field on the phone; the choice
-is kept in the label. On the Merge page, ✓ marks a row printed by hand and ↺
-puts it back on the list. A line break in a value is stored as `\n`, which gLabels
+is kept in the label. A line break in a value is stored as `\n`, which gLabels
 prints as a new line.
+
+On the Merge page the list is a grid like the table editor: type in a cell,
+type in the empty row at the bottom to add one, paste a block from a
+spreadsheet, or press Delete to empty a field. ✓ marks a row printed by hand
+and ↺ puts it back on the list. Every change is sent as a change to that one
+row, so a row added on a phone meanwhile is never written over. **Mark all as
+printed** and **Clear printed rows** ask first.
 
 The list is the label's merge source, an ordinary text file with field names
 on line 1; a label with fields but no source gets `merges/<label>.tsv` with
 its first row. Three columns are added at the end: `_id`, `_copies` and
 `_printed`. A label does not use them, so gLabels on a desktop can still open
-and print the file (all rows, once each).
+and print the file (all rows, once each). The table editor hides them and
+keeps them as they are. A row without an `_id` yet (a file made elsewhere)
+gets one that stays the same until it is written at the next change.
+
+A file with a column without a name, two columns with the same name or values
+past the last name is not used as a list: saving it as one would drop those
+values. The Merge page says so; fix it with **Edit…**.
+
+### Earlier versions
+
+Before the application overwrites or deletes a `.csv`, `.tsv` or `.txt`, it
+keeps the version before in `<GLW_DATA_DIR>/file-history/` (everything from
+the last 30 days, at least the newest 50 per file). **Earlier versions…** in
+the table editor shows them; choose one and save to put it back.
 
 ## On a phone
 
@@ -289,7 +308,8 @@ source on the Merge page.
 The file is read and written with the same rules gLabels uses, so a line break
 in a cell is stored as `\n`. When the file changed after it was opened (a row
 added on a phone, for example), saving asks before writing over that change.
-In a list, `_id` cannot be changed and new rows get one when saved.
+In a list, the columns `_id`, `_copies` and `_printed` are hidden and kept;
+new rows get an `_id` when saved.
 
 ## Documentation
 

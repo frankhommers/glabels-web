@@ -8,12 +8,12 @@
  *  phone, for example); you then choose whether to save over it.
  */
 
-import 'react-data-grid/lib/styles.css'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { DataGrid, type Column, type RenderEditCellContentProps } from 'react-data-grid'
-import { ChangedElsewhere, files } from '../api/files'
+import { DataGrid, type Column } from 'react-data-grid'
+import { CellEditor, CellText } from './gridCells'
+import { ChangedElsewhere, files, type FileVersion } from '../api/files'
 import { useHistory } from '../editor/useHistory'
+import { formatMoment } from '../app/locale'
 import { useT } from '../i18n'
 import { useDialogs } from '../ui/dialogs'
 import * as model from './tableModel'
@@ -55,6 +55,7 @@ export function TableEditor({
   const [busy, setBusy] = useState(false)
   const [active, setActive] = useState<{ rowIdx: number; columnIdx: number } | null>(null)
   const [menu, setMenu] = useState<Menu | null>(null)
+  const [showVersions, setShowVersions] = useState(false)
   const dirty = saved !== null && table !== saved
   const name = path.split('/').pop() ?? path
 
@@ -141,6 +142,20 @@ export function TableEditor({
     if (await discardFirst(t('table.discardMessage'))) onClose()
   }
 
+  /** Put an earlier version in the editor, as a change you still save. */
+  const takeVersion = async (version: string) => {
+    if (!source) return
+    setShowVersions(false)
+    setProblem(null)
+    try {
+      const result = await files.readTable(path, source.delimiter, version)
+      change(model.fromLines(result.rows, table.header, table.columns))
+      setSource({ delimiter: result.delimiter, sha256: result.sha256 })
+    } catch (error) {
+      setProblem(String(error instanceof Error ? error.message : error))
+    }
+  }
+
   const reload = async (delimiter?: string) => {
     if (await discardFirst(t('table.reloadMessage'))) await load(delimiter)
   }
@@ -206,22 +221,20 @@ export function TableEditor({
         headerCellClass: 'table-number',
         renderCell: ({ row, rowIdx }) => (row.id === NEW_ROW ? '+' : rowIdx + 1),
       },
-      ...table.columns.map((column, index): Column<GridRow> => {
+      // The list's own columns stay out of sight; saving keeps them as they are.
+      ...table.columns.flatMap((column, index): Column<GridRow>[] => {
+        if (model.isMeta(table, column)) return []
         const field = model.fieldName(table, index)
-        const meta = table.header && model.META_COLUMNS.includes(column.name)
-        return {
+        return [{
           key: column.id,
           name: field,
           minWidth: 60,
           resizable: true,
-          editable: !(table.header && column.name === '_id'),
-          cellClass: meta ? 'table-meta' : undefined,
-          headerCellClass: meta ? 'table-meta' : undefined,
           editorOptions: { displayCellContent: true },
           renderHeaderCell: () => (
             <span
               className="table-header"
-              title={meta ? t('table.metaColumn') : table.header ? t('table.renameHint') : undefined}
+              title={table.header ? t('table.renameHint') : undefined}
               onDoubleClick={() => void rename(index)}
               onContextMenu={(event) => {
                 event.preventDefault()
@@ -233,7 +246,7 @@ export function TableEditor({
           ),
           renderCell: ({ row }) => <CellText value={row.values[column.id] ?? ''} />,
           renderEditCell: (props) => <CellEditor {...props} />,
-        }
+        }]
       }),
     ],
     // rename reads the table it was made with, which is this one.
@@ -252,6 +265,8 @@ export function TableEditor({
   }
 
   const columnIndex = (key: string) => table.columns.findIndex((column) => column.id === key)
+  const visibleFields = table.columns.filter((column) => !model.isMeta(table, column)).length
+  const hiddenColumns = table.columns.length - visibleFields
   const rowIndex = (row: GridRow) => (row.id === NEW_ROW ? table.rows.length : table.rows.indexOf(row))
 
   const menuItems = (target: Menu) => {
@@ -273,7 +288,7 @@ export function TableEditor({
       {
         label: t('table.deleteColumn'),
         run: () => change(model.deleteColumn(table, columnIdx)),
-        disabled: table.columns.length <= 1,
+        disabled: visibleFields <= 1,
       },
       'separator',
       { label: t('table.sortAscending'), run: () => change(model.sortRows(table, columnIdx, false)) },
@@ -324,14 +339,14 @@ export function TableEditor({
             type="button"
             className="tool text-tool"
             disabled={busy}
-            onClick={() => change(model.insertColumn(table, activeColumn !== null ? activeColumn + 1 : table.columns.length))}
+            onClick={() => change(model.insertColumn(table, activeColumn !== null ? activeColumn + 1 : model.endOfFields(table)))}
           >
             {t('table.addColumn')}
           </button>
           <button
             type="button"
             className="tool text-tool"
-            disabled={activeColumn === null || table.columns.length <= 1}
+            disabled={activeColumn === null || visibleFields <= 1}
             onClick={() => activeColumn !== null && change(model.deleteColumn(table, activeColumn))}
           >
             {t('table.deleteColumn')}
@@ -361,6 +376,9 @@ export function TableEditor({
             </select>
           </label>
           <span className="spacer" />
+          <button type="button" className="tool text-tool" disabled={busy || !source} onClick={() => setShowVersions(true)}>
+            {t('table.versions')}
+          </button>
           <button type="button" className="tool text-tool" disabled={busy} onClick={() => void reload(source?.delimiter)}>
             {t('table.reload')}
           </button>
@@ -391,7 +409,7 @@ export function TableEditor({
                 if (args.mode !== 'ACTIVE' || !args.column || args.row.id === NEW_ROW) return
                 if (event.key !== 'Delete' && event.key !== 'Backspace') return
                 const key = args.column.key
-                if (columnIndex(key) < 0 || (table.header && table.columns[columnIndex(key)]?.name === '_id')) return
+                if (columnIndex(key) < 0) return
                 event.preventGridDefault()
                 event.preventDefault()
                 const row = args.row
@@ -435,7 +453,8 @@ export function TableEditor({
 
         <div className="modal-buttons">
           <span className="muted table-summary">
-            {t('table.rows', { count: table.rows.length })} · {t('table.fields', { count: table.columns.length })}
+            {t('table.rows', { count: table.rows.length })} · {t('table.fields', { count: visibleFields })}
+            {hiddenColumns > 0 ? ` · ${t('table.listColumnsHidden')}` : null}
             {' — '}
             {t('table.hint')}
           </span>
@@ -446,86 +465,14 @@ export function TableEditor({
         </div>
       </div>
 
+      {showVersions ? (
+        <VersionsDialog path={path} onChoose={(version) => void takeVersion(version)} onClose={() => setShowVersions(false)} />
+      ) : null}
+
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />
       ) : null}
     </div>
-  )
-}
-
-/** A cell's text on one line; a line break shows as ↵. */
-function CellText({ value }: { value: string }) {
-  if (!value.includes('\n')) return <>{value}</>
-  const lines = value.split('\n')
-  return (
-    <>
-      {lines.map((line, index) => (
-        <span key={index}>
-          {index > 0 ? <span className="table-newline">↵</span> : null}
-          {line}
-        </span>
-      ))}
-    </>
-  )
-}
-
-/** Editing a cell: a text area over the cell, so a value can hold several
- *  lines. Enter is done, Shift+Enter (or Alt+Enter) a new line, Escape
- *  undoes the typing. */
-function CellEditor({ row, column, onRowChange, onClose }: RenderEditCellContentProps<GridRow>) {
-  const anchor = useRef<HTMLSpanElement | null>(null)
-  const area = useRef<HTMLTextAreaElement | null>(null)
-  const value = row.values[column.key] ?? ''
-
-  // Over the cell, a bit wider when the cell is narrow; focused right away so
-  // the key that started editing ends up in it.
-  useLayoutEffect(() => {
-    const cell = anchor.current?.closest('[role="gridcell"]')
-    const element = area.current
-    if (!cell || !element) return
-    const box = cell.getBoundingClientRect()
-    element.style.left = `${box.left}px`
-    element.style.top = `${box.top}px`
-    element.style.width = `${Math.max(box.width, 220)}px`
-    element.style.minHeight = `${box.height}px`
-    element.focus()
-    element.select()
-  }, [])
-
-  const set = (next: string) => onRowChange({ ...row, values: { ...row.values, [column.key]: next } })
-
-  return (
-    <>
-      <span ref={anchor} hidden />
-      {createPortal(
-        <textarea
-          ref={area}
-          className="table-cell-editor"
-          rows={Math.min(8, value.split('\n').length)}
-          value={value}
-          onChange={(event) => set(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.shiftKey || event.altKey)) {
-              // A new line in the cell; the grid must not see this Enter.
-              event.stopPropagation()
-              if (event.altKey) {
-                event.preventDefault()
-                const { selectionStart, selectionEnd } = event.currentTarget
-                set(value.slice(0, selectionStart) + '\n' + value.slice(selectionEnd))
-                requestAnimationFrame(() => area.current?.setSelectionRange(selectionStart + 1, selectionStart + 1))
-              }
-            } else if (event.key === 'Enter') {
-              event.preventDefault()
-            } else if (event.key === 'Tab') {
-              event.preventDefault()
-              event.stopPropagation()
-              onClose(true)
-            }
-          }}
-        />,
-        document.body,
-      )}
-    </>
   )
 }
 
@@ -586,6 +533,65 @@ function ContextMenu({
           </button>
         ),
       )}
+    </div>
+  )
+}
+
+/** Earlier versions of the file, kept each time the application overwrote
+ *  or deleted it. Choosing one puts it in the editor; saving puts it back. */
+function VersionsDialog({
+  path,
+  onChoose,
+  onClose,
+}: {
+  path: string
+  onChoose: (version: string) => void
+  onClose: () => void
+}) {
+  const t = useT()
+  const [versions, setVersions] = useState<FileVersion[] | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  useEffect(() => {
+    files
+      .versions(path)
+      .then(setVersions)
+      .catch((error) => setProblem(String(error instanceof Error ? error.message : error)))
+  }, [path])
+
+  return (
+    <div className="modal-backdrop question-backdrop" role="dialog" aria-modal aria-label={t('table.versionsTitle')}>
+      <div className="modal versions-modal">
+        <div className="modal-title">{t('table.versionsTitle')}</div>
+        <div className="modal-body">
+          <p className="muted">{t('table.versionsIntro')}</p>
+          {problem ? <p className="inline-warning">{problem}</p> : null}
+          {versions && versions.length === 0 ? <p>{t('table.noVersions')}</p> : null}
+          {versions && versions.length > 0 ? (
+            <table className="project-table">
+              <tbody>
+                {versions.map((version) => (
+                  <tr key={version.id}>
+                    <td>{formatMoment(version.saved_at)}</td>
+                    <td className="muted">{t('table.lines', { count: version.lines })}</td>
+                    <td>
+                      <button type="button" onClick={() => onChoose(version.id)}>
+                        {t('table.useVersion')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </div>
+        <div className="modal-buttons">
+          <span className="spacer" />
+          <button type="button" onClick={onClose}>
+            {t('common.close')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

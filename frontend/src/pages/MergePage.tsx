@@ -6,15 +6,17 @@
  *  you like (see ListTable).
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { MergePreview } from '../api/types'
 import type { Session } from '../app/session'
 import type { MessageKey } from '../i18n'
 import { FileDialog } from '../components/FileDialog'
-import { ListTable } from '../components/ListTable'
 import { OpenTable } from '../components/OpenTable'
 import { lists, type LabelList } from '../api/lists'
+
+// The grid is loaded once a list is shown.
+const ListTable = lazy(() => import('../components/ListTable').then((module) => ({ default: module.ListTable })))
 
 const MERGE_TYPES: { id: string; label: MessageKey }[] = [
   { id: 'None', label: 'merge.type.none' },
@@ -121,6 +123,9 @@ export function MergePage({ session }: { session: Session }) {
           <p className="inline-notice">{t('merge.chooseTypeFirst')}</p>
         ) : null}
         {problem ? <p className="inline-warning">{problem}</p> : null}
+        {list?.reason === 'columns-without-name' ? (
+          <p className="inline-notice">{t('merge.listColumnsWithoutName')}</p>
+        ) : null}
       </fieldset>
 
       {list?.available && list.fields.length > 0 ? (
@@ -129,7 +134,9 @@ export function MergePage({ session }: { session: Session }) {
           {list.source_path ? null : (
             <p className="muted">{t('merge.listNew', { fields: list.fields.join(', ') })}</p>
           )}
-          <ListTable docId={detail.id} list={list} onChange={(next) => void listChanged(next)} onProblem={setProblem} />
+          <Suspense fallback={null}>
+            <ListTable docId={detail.id} list={list} onChange={(next) => void listChanged(next)} onProblem={setProblem} />
+          </Suspense>
         </fieldset>
       ) : null}
 

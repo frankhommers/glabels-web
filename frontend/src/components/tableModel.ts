@@ -125,19 +125,33 @@ export function sortRows(state: TableState, at: number, descending: boolean): Ta
   return { ...state, rows }
 }
 
+/** The list's own columns, when line 1 holds names: hidden in the editor
+ *  and kept as they are. */
+export function isMeta(state: TableState, column: TableColumn): boolean {
+  return state.header && META_COLUMNS.includes(column.name)
+}
+
+/** Where a new field goes at the end: before the list's own columns. */
+export function endOfFields(state: TableState): number {
+  const first = state.columns.findIndex((column) => isMeta(state, column))
+  return first < 0 ? state.columns.length : first
+}
+
 /** Put a block of cells (from a spreadsheet) at a position, adding rows and
- *  columns where it sticks out. */
+ *  fields where it sticks out. The list's own columns are skipped. */
 export function pasteBlock(state: TableState, rowAt: number, columnAt: number, block: string[][]): TableState {
   let next = state
   const width = Math.max(...block.map((line) => line.length))
-  while (next.columns.length < columnAt + width) next = insertColumn(next, next.columns.length)
+  const targets = () => next.columns.slice(columnAt).filter((column) => !isMeta(next, column))
+  while (targets().length < width) next = insertColumn(next, endOfFields(next))
   while (next.rows.length < rowAt + block.length) next = insertRow(next, next.rows.length)
+  const columns = targets()
   const rows = next.rows.map((row, index) => {
     const line = block[index - rowAt]
     if (!line) return row
     const values = { ...row.values }
     line.forEach((value, offset) => {
-      const column = next.columns[columnAt + offset]
+      const column = columns[offset]
       if (column) values[column.id] = value
     })
     return { ...row, values }
