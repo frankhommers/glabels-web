@@ -21,6 +21,7 @@ from .api import (
     routes_lists,
     routes_preferences,
     routes_printers,
+    routes_tables,
     routes_templates,
 )
 from .api.deps import AppState
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_lists.router)
     app.include_router(routes_fonts.router)
     app.include_router(routes_files.router)
+    app.include_router(routes_tables.router)
     app.include_router(routes_printers.router)
     app.include_router(routes_preferences.router)
 

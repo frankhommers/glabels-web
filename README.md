@@ -39,6 +39,8 @@ project.
   saving `.glabels` files, and managing fonts.
 - Merging with CSV and tab separated files, including a field overview, a data
   preview and the merge controls when printing.
+- Editing a merge source as a table, like a small spreadsheet. See *Editing a
+  data file* below.
 - Lists: rows added from the desktop or a phone and printed together later,
   only what is still to print. See *Lists* below.
 - Printer management over IPP: adding a printer after checking with the
@@ -262,6 +264,28 @@ A merge source is stored in the document relative to the document's folder
 writes it and looks for it, so the file stays usable on a desktop. Saving the
 project into another folder adjusts that path. Which file in the shared folder
 is the source is also kept in SQLite.
+
+### Editing a data file
+
+A `.csv`, `.tsv` or `.txt` file opens as a table: double-click it on the Files
+page (or select it and choose **Edit table…**), or use **Edit…** next to the
+source on the Merge page.
+
+- Type in a cell to change it; **Shift+Enter** starts a new line in a cell.
+  Typing in the empty row at the bottom adds a row.
+- Paste a block copied from Excel, Numbers or Google Sheets into a cell; it
+  fills from there and adds rows and fields where needed. Drag the corner of a
+  cell to copy its value down.
+- Right-click a cell or a field name to insert or delete rows and fields,
+  rename a field or sort. Delete empties a cell; Ctrl+Z and Ctrl+S work as
+  usual.
+- **Field names on line 1** and **Separated by** follow the file; a `.tsv` is
+  tab separated, otherwise the separator is guessed from line 1.
+
+The file is read and written with the same rules gLabels uses, so a line break
+in a cell is stored as `\n`. When the file changed after it was opened (a row
+added on a phone, for example), saving asks before writing over that change.
+In a list, `_id` cannot be changed and new rows get one when saved.
 
 ## Documentation
 

@@ -11,6 +11,7 @@ import type { FileEntry } from '../api/files'
 import { FileBrowser } from '../components/FileBrowser'
 import type { Session } from '../app/session'
 import { ProjectsView } from '../components/ProjectsView'
+import { OpenTable } from '../components/OpenTable'
 
 export function FilesPage({
   session,
@@ -32,6 +33,8 @@ export function FilesPage({
   const [startPath, setStartPath] = useState('')
   const lastPath = useRef('')
   const [project, setProject] = useState<string | null>(null)
+  // A merge source open in the table editor.
+  const [table, setTable] = useState<string | null>(null)
 
   const openDocument = async (path: string) => {
     setProblem(null)
@@ -52,6 +55,11 @@ export function FilesPage({
         {entry?.kind === 'document' ? (
           <button type="button" className="default" onClick={() => void openDocument(entry.path)}>
             {t('files.openAsProject')}
+          </button>
+        ) : null}
+        {entry?.kind === 'data' ? (
+          <button type="button" className="default" onClick={() => setTable(entry.path)}>
+            {t('table.edit')}
           </button>
         ) : null}
       </div>
@@ -93,6 +101,7 @@ export function FilesPage({
           }}
           onActivate={(item) => {
             if (item.kind === 'document') void openDocument(item.path)
+            if (item.kind === 'data') setTable(item.path)
           }}
           onChanged={() => {
             onFontsChanged()
@@ -105,6 +114,14 @@ export function FilesPage({
           }}
         />
       )}
+
+      {table ? (
+        <OpenTable
+          path={table}
+          onClose={() => setTable(null)}
+          onSaved={() => session.setStatus('status.folderUpdated')}
+        />
+      ) : null}
     </div>
   )
 }

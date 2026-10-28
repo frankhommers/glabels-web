@@ -13,6 +13,7 @@ import type { Session } from '../app/session'
 import type { MessageKey } from '../i18n'
 import { FileDialog } from '../components/FileDialog'
 import { ListTable } from '../components/ListTable'
+import { OpenTable } from '../components/OpenTable'
 import { lists, type LabelList } from '../api/lists'
 
 const MERGE_TYPES: { id: string; label: MessageKey }[] = [
@@ -35,6 +36,7 @@ export function MergePage({ session }: { session: Session }) {
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [list, setList] = useState<LabelList | null>(null)
+  const [editing, setEditing] = useState(false)
 
   const mergeType = detail?.merge?.type ?? 'None'
   const sourcePath = detail?.merge?.source_path ?? null
@@ -108,6 +110,9 @@ export function MergePage({ session }: { session: Session }) {
           <button type="button" disabled={busy || mergeType === 'None'} onClick={() => setPicking(true)}>
             {t('merge.chooseFile')}
           </button>
+          <button type="button" disabled={busy || !sourcePath} onClick={() => setEditing(true)}>
+            {t('common.edit')}
+          </button>
           <button type="button" disabled={busy || !sourcePath} onClick={() => void apply(mergeType, null)}>
             {t('merge.unlink')}
           </button>
@@ -170,6 +175,19 @@ export function MergePage({ session }: { session: Session }) {
             <p className="inline-notice">{t('merge.previewHint')}</p>
           </fieldset>
         </>
+      ) : null}
+
+      {editing && sourcePath ? (
+        <OpenTable
+          path={sourcePath}
+          // The merge type says whether line 1 holds the field names.
+          header={/Keys$/.test(mergeType)}
+          onClose={() => {
+            setEditing(false)
+            void reload()
+          }}
+          onSaved={() => void reload()}
+        />
       ) : null}
 
       {picking ? (

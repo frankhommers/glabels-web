@@ -18,6 +18,18 @@ export type DirectoryListing = {
   entries: FileEntry[]
 }
 
+/** A merge source as lines of cells, read the way gLabels reads it. */
+export type Table = {
+  path: string
+  delimiter: string
+  rows: string[][]
+  /** The version read; saving over a newer one is refused. */
+  sha256: string
+}
+
+/** The file changed after it was read (a row from a phone, for example). */
+export class ChangedElsewhere extends Error {}
+
 async function json<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`
@@ -59,6 +71,23 @@ export const files = {
     fetch(`/api/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }).then((response) =>
       json<void>(response),
     ),
+
+  readTable: (path: string, delimiter?: string) => {
+    const query = new URLSearchParams({ path })
+    if (delimiter) query.set('delimiter', delimiter)
+    return fetch(`/api/files/table?${query}`).then((response) => json<Table>(response))
+  },
+
+  /** Without `sha256` whatever is there is overwritten. */
+  saveTable: async (table: { path: string; delimiter: string; rows: string[][]; sha256?: string }) => {
+    const response = await fetch('/api/files/table', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(table),
+    })
+    if (response.status === 409) throw new ChangedElsewhere('changed-elsewhere')
+    return json<Table>(response)
+  },
 
   downloadUrl: (path: string) => `/api/files/download?path=${encodeURIComponent(path)}`,
 }
