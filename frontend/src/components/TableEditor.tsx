@@ -11,9 +11,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DataGrid, type Column } from 'react-data-grid'
 import { CellEditor, CellText } from './gridCells'
-import { ChangedElsewhere, files, type FileVersion } from '../api/files'
+import { ChangedElsewhere, files } from '../api/files'
 import { useHistory } from '../editor/useHistory'
-import { formatMoment } from '../app/locale'
 import { useT } from '../i18n'
 import { useDialogs } from '../ui/dialogs'
 import * as model from './tableModel'
@@ -55,7 +54,6 @@ export function TableEditor({
   const [busy, setBusy] = useState(false)
   const [active, setActive] = useState<{ rowIdx: number; columnIdx: number } | null>(null)
   const [menu, setMenu] = useState<Menu | null>(null)
-  const [showVersions, setShowVersions] = useState(false)
   const dirty = saved !== null && table !== saved
   const name = path.split('/').pop() ?? path
 
@@ -140,20 +138,6 @@ export function TableEditor({
 
   const close = async () => {
     if (await discardFirst(t('table.discardMessage'))) onClose()
-  }
-
-  /** Put an earlier version in the editor, as a change you still save. */
-  const takeVersion = async (version: string) => {
-    if (!source) return
-    setShowVersions(false)
-    setProblem(null)
-    try {
-      const result = await files.readTable(path, source.delimiter, version)
-      change(model.fromLines(result.rows, table.header, table.columns))
-      setSource({ delimiter: result.delimiter, sha256: result.sha256 })
-    } catch (error) {
-      setProblem(String(error instanceof Error ? error.message : error))
-    }
   }
 
   const reload = async (delimiter?: string) => {
@@ -376,9 +360,6 @@ export function TableEditor({
             </select>
           </label>
           <span className="spacer" />
-          <button type="button" className="tool text-tool" disabled={busy || !source} onClick={() => setShowVersions(true)}>
-            {t('table.versions')}
-          </button>
           <button type="button" className="tool text-tool" disabled={busy} onClick={() => void reload(source?.delimiter)}>
             {t('table.reload')}
           </button>
@@ -465,10 +446,6 @@ export function TableEditor({
         </div>
       </div>
 
-      {showVersions ? (
-        <VersionsDialog path={path} onChoose={(version) => void takeVersion(version)} onClose={() => setShowVersions(false)} />
-      ) : null}
-
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />
       ) : null}
@@ -533,65 +510,6 @@ function ContextMenu({
           </button>
         ),
       )}
-    </div>
-  )
-}
-
-/** Earlier versions of the file, kept each time the application overwrote
- *  or deleted it. Choosing one puts it in the editor; saving puts it back. */
-function VersionsDialog({
-  path,
-  onChoose,
-  onClose,
-}: {
-  path: string
-  onChoose: (version: string) => void
-  onClose: () => void
-}) {
-  const t = useT()
-  const [versions, setVersions] = useState<FileVersion[] | null>(null)
-  const [problem, setProblem] = useState<string | null>(null)
-
-  useEffect(() => {
-    files
-      .versions(path)
-      .then(setVersions)
-      .catch((error) => setProblem(String(error instanceof Error ? error.message : error)))
-  }, [path])
-
-  return (
-    <div className="modal-backdrop question-backdrop" role="dialog" aria-modal aria-label={t('table.versionsTitle')}>
-      <div className="modal versions-modal">
-        <div className="modal-title">{t('table.versionsTitle')}</div>
-        <div className="modal-body">
-          <p className="muted">{t('table.versionsIntro')}</p>
-          {problem ? <p className="inline-warning">{problem}</p> : null}
-          {versions && versions.length === 0 ? <p>{t('table.noVersions')}</p> : null}
-          {versions && versions.length > 0 ? (
-            <table className="project-table">
-              <tbody>
-                {versions.map((version) => (
-                  <tr key={version.id}>
-                    <td>{formatMoment(version.saved_at)}</td>
-                    <td className="muted">{t('table.lines', { count: version.lines })}</td>
-                    <td>
-                      <button type="button" onClick={() => onChoose(version.id)}>
-                        {t('table.useVersion')}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-        </div>
-        <div className="modal-buttons">
-          <span className="spacer" />
-          <button type="button" onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

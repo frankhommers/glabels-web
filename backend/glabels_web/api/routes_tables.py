@@ -106,57 +106,13 @@ def _read(app: AppState, path: str, delimiter: str | None) -> Table:
     )
 
 
-class VersionOut(BaseModel):
-    id: str
-    saved_at: str
-    size_bytes: int
-    # Lines in the file, line 1 included.
-    lines: int
-
-
 @router.get("/table", response_model=Table)
 def read_table(
     path: str = Query(..., max_length=1024),
     delimiter: str | None = Query(None, pattern="^(,|\t|;|:)$"),
-    version: str | None = Query(None, max_length=64),
     app: AppState = Depends(state),
 ) -> Table:
-    """The file, or an earlier version of it. An earlier version comes with
-    the version stamp of the file as it is now, so saving it puts it back."""
-    current = _read(app, path, delimiter)
-    if version is None:
-        return current
-    try:
-        raw = app.files.read_version(path, version)
-    except FileAreaError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    text = raw.decode("utf-8-sig", errors="replace")
-    used = delimiter or guess_delimiter(path, text)
-    return Table(path=current.path, delimiter=used, rows=parse_text(text, used), sha256=current.sha256)
-
-
-@router.get("/versions", response_model=list[VersionOut])
-def list_versions(path: str = Query(..., max_length=1024), app: AppState = Depends(state)) -> list[VersionOut]:
-    """Earlier versions of a data file, newest first: kept each time the
-    application overwrote or deleted it."""
-    _check_kind(path)
-    try:
-        versions = app.files.versions(path)
-    except FileAreaError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    out = []
-    for item in versions:
-        raw = app.files.read_version(path, item.id)
-        text = raw.decode("utf-8-sig", errors="replace")
-        out.append(
-            VersionOut(
-                id=item.id,
-                saved_at=item.saved_at,
-                size_bytes=item.size_bytes,
-                lines=len(parse_text(text, guess_delimiter(path, text))),
-            )
-        )
-    return out
+    return _read(app, path, delimiter)
 
 
 @router.put("/table", response_model=Table)

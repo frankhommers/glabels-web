@@ -27,9 +27,6 @@ export type Table = {
   sha256: string
 }
 
-/** An earlier version of a data file, kept before the application changed it. */
-export type FileVersion = { id: string; saved_at: string; size_bytes: number; lines: number }
-
 /** The file changed after it was read (a row from a phone, for example). */
 export class ChangedElsewhere extends Error {}
 
@@ -75,16 +72,11 @@ export const files = {
       json<void>(response),
     ),
 
-  /** With `version`: that earlier version, stamped as the file is now. */
-  readTable: (path: string, delimiter?: string, version?: string) => {
+  readTable: (path: string, delimiter?: string) => {
     const query = new URLSearchParams({ path })
     if (delimiter) query.set('delimiter', delimiter)
-    if (version) query.set('version', version)
     return fetch(`/api/files/table?${query}`).then((response) => json<Table>(response))
   },
-
-  versions: (path: string) =>
-    fetch(`/api/files/versions?${new URLSearchParams({ path })}`).then((response) => json<FileVersion[]>(response)),
 
   /** Without `sha256` whatever is there is overwritten. */
   saveTable: async (table: { path: string; delimiter: string; rows: string[][]; sha256?: string }) => {

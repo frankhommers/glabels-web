@@ -14,7 +14,7 @@ import re
 import shutil
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 log = logging.getLogger(__name__)
@@ -52,31 +52,9 @@ class FileEntry:
     kind: str  # "folder" | "document" | "data" | "font" | "definition" | "other"
 
 
-@dataclass(frozen=True)
-class FileVersion:
-    """An earlier version of a data file, kept before it was overwritten."""
-
-    id: str  # the name in the history folder; also its time, sortable
-    saved_at: str
-    size_bytes: int
-
-
-# Earlier versions kept per data file: everything from the last month (a
-# busy evening makes many), but never fewer than the newest 50 or more than
-# 1000.
-KEEP_DAYS = 30
-KEEP_AT_LEAST = 50
-KEEP_AT_MOST = 1000
-
-
 class FileArea:
-    def __init__(self, root: Path, history: Path | None = None):
+    def __init__(self, root: Path):
         self._root = root
-        # Earlier versions of data files (merge sources and lists): a file the
-        # application overwrites or deletes is copied here first, so nothing
-        # it does can lose rows for good. Outside the shared folder, so the
-        # folder stays as the user made it.
-        self._history = history
 
     @property
     def root(self) -> Path:
@@ -167,64 +145,6 @@ class FileArea:
             raise FileAreaError("file not found")
         return self._entry(path)
 
-    # ---------------------------------------------------------------- history
-    def _history_dir(self, target: Path) -> Path | None:
-        if self._history is None:
-            return None
-        return self._history / self.relative(target)
-
-    def keep_version(self, target: Path, *, unless: bytes | None = None) -> None:
-        """Copy a data file to its history before it changes. Nothing is kept
-        when the new content is the same (`unless`)."""
-        folder = self._history_dir(target)
-        if folder is None or not target.is_file() or target.suffix.casefold() not in DATA_SUFFIXES:
-            return
-        try:
-            old = target.read_bytes()
-            if unless is not None and old == unless:
-                return
-            folder.mkdir(parents=True, exist_ok=True)
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-            (folder / stamp).write_bytes(old)
-            self._prune(folder)
-        except OSError as exc:
-            # Keeping a version must never stop the change itself.
-            log.warning("no earlier version kept of %s: %s", target, exc)
-
-    @staticmethod
-    def _prune(folder: Path) -> None:
-        names = sorted(item.name for item in folder.iterdir())
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=KEEP_DAYS)).strftime("%Y%m%dT%H%M%S.%fZ")
-        for index, name in enumerate(names):
-            newer = len(names) - index - 1
-            if newer >= KEEP_AT_MOST or (newer >= KEEP_AT_LEAST and name < cutoff):
-                (folder / name).unlink(missing_ok=True)
-
-    def versions(self, relative: str) -> list[FileVersion]:
-        """Earlier versions of a data file, newest first."""
-        folder = self._history_dir(self.resolve(relative))
-        if folder is None or not folder.is_dir():
-            return []
-        out = []
-        for item in sorted(folder.iterdir(), reverse=True):
-            try:
-                saved = datetime.strptime(item.name, "%Y%m%dT%H%M%S.%fZ").replace(tzinfo=timezone.utc)
-            except ValueError:
-                continue
-            out.append(
-                FileVersion(id=item.name, saved_at=saved.isoformat(timespec="seconds"), size_bytes=item.stat().st_size)
-            )
-        return out
-
-    def read_version(self, relative: str, version: str) -> bytes:
-        folder = self._history_dir(self.resolve(relative))
-        if folder is None or "/" in version or version.startswith("."):
-            raise FileAreaError("version not found")
-        path = folder / version
-        if not path.is_file():
-            raise FileAreaError("version not found")
-        return path.read_bytes()
-
     # ------------------------------------------------------------------ changes
     def write(self, directory: str, name: str, data: bytes, *, overwrite: bool = False) -> FileEntry:
         parent = self.resolve(directory)
@@ -237,7 +157,6 @@ class FileArea:
             while target.exists():
                 target = parent / f"{stem}-{counter}{suffix}"
                 counter += 1
-        self.keep_version(target, unless=data)
         target.write_bytes(data)
         return self._entry(target)
 
@@ -253,7 +172,6 @@ class FileArea:
             raise FileAreaError("folder not found")
         if target.is_dir():
             raise FileAreaError("there is a folder with that name")
-        self.keep_version(target, unless=data)
         temporary = target.with_name(f".{target.name}.tmp")
         temporary.write_bytes(data)
         os.replace(temporary, target)
@@ -300,7 +218,6 @@ class FileArea:
                 raise FileAreaError("the folder is not empty")
             path.rmdir()
         else:
-            self.keep_version(path)
             path.unlink()
 
     def copy_into(self, relative: str, destination: Path) -> Path:

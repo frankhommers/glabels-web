@@ -1,5 +1,5 @@
-"""What went wrong once must not lose rows again: rows without an id, the
-buttons that change every row, and files a list cannot save unchanged."""
+"""What went wrong once must not lose rows again: rows without an id, and
+files a list cannot save unchanged."""
 
 from __future__ import annotations
 
@@ -59,47 +59,6 @@ def test_a_row_that_changed_elsewhere_is_not_found_rather_than_another_changed(e
     assert (folder / "merges" / "jacks.tsv").read_text() == "Jack\nNew\nA\nB\n"
 
 
-def test_clearing_printed_rows_keeps_the_earlier_version(env):
-    client, folder = env
-    doc = _label_with_source(client, folder, "Jack\nA\nB\n")
-    client.post(f"/api/documents/{doc}/list/printed", json={"printed": True})
-    cleared = client.post(f"/api/documents/{doc}/list/clear-printed").json()
-    assert cleared["rows"] == []
-
-    versions = client.get("/api/files/versions", params={"path": "merges/jacks.tsv"}).json()
-    assert len(versions) == 2  # before marking, before clearing
-    oldest = client.get(
-        "/api/files/table", params={"path": "merges/jacks.tsv", "version": versions[-1]["id"]}
-    ).json()
-    assert oldest["rows"] == [["Jack"], ["A"], ["B"]]
-
-    # Saving that version puts it back.
-    restored = client.put(
-        "/api/files/table",
-        json={"path": "merges/jacks.tsv", "delimiter": "\t", "rows": oldest["rows"], "sha256": oldest["sha256"]},
-    )
-    assert restored.status_code == 200
-    assert (folder / "merges" / "jacks.tsv").read_text() == "Jack\nA\nB\n"
-
-
-def test_deleting_a_data_file_keeps_it(env):
-    client, folder = env
-    (folder / "merges").mkdir(parents=True)
-    (folder / "merges" / "a.csv").write_text("x\n1\n")
-    assert client.delete("/api/files", params={"path": "merges/a.csv"}).status_code == 204
-    versions = client.get("/api/files/versions", params={"path": "merges/a.csv"}).json()
-    assert len(versions) == 1
-
-
-def test_saving_the_same_content_keeps_no_version(env):
-    client, folder = env
-    (folder / "merges").mkdir(parents=True)
-    (folder / "merges" / "a.csv").write_text("x\n1\n")
-    table = client.get("/api/files/table", params={"path": "merges/a.csv"}).json()
-    client.put("/api/files/table", json={**table, "sha256": table["sha256"]})
-    assert client.get("/api/files/versions", params={"path": "merges/a.csv"}).json() == []
-
-
 @pytest.mark.parametrize(
     "text",
     [
@@ -120,21 +79,3 @@ def test_a_file_a_list_would_save_with_values_missing_is_no_list(env, text):
 def test_an_empty_cell_past_the_names_is_fine():
     parsed = merge_list.parse(b"Jack\nA\t\n", "Text/Tab/Line1Keys")
     assert [row.values for row in parsed.rows] == [{"Jack": "A"}]
-
-
-def test_versions_of_the_last_month_are_all_kept(tmp_path, monkeypatch):
-    from glabels_web.files import store
-
-    area = store.FileArea(tmp_path / "shared", tmp_path / "history")
-    area.ensure()
-    monkeypatch.setattr(store, "KEEP_AT_LEAST", 3)
-    for number in range(8):
-        area.write_file("a.csv", f"x\n{number}\n".encode())
-    assert len(area.versions("a.csv")) == 7  # all recent, though more than 3
-
-    folder = tmp_path / "history" / "a.csv"
-    for index, item in enumerate(sorted(folder.iterdir())[:5]):
-        item.rename(folder / f"2020010{index}T000000.000000Z")  # make five old
-    area.write_file("a.csv", b"x\nlast\n")
-    # The old ones go, as long as at least three stay.
-    assert len(area.versions("a.csv")) == 3

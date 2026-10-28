@@ -215,13 +215,6 @@ A file with a column without a name, two columns with the same name or values
 past the last name is not used as a list: saving it as one would drop those
 values. The Merge page says so; fix it with **Edit…**.
 
-### Earlier versions
-
-Before the application overwrites or deletes a `.csv`, `.tsv` or `.txt`, it
-keeps the version before in `<GLW_DATA_DIR>/file-history/` (everything from
-the last 30 days, at least the newest 50 per file). **Earlier versions…** in
-the table editor shows them; choose one and save to put it back.
-
 ## On a phone
 
 A phone opening the application gets a view made for printing, not for
