@@ -19,9 +19,11 @@ export type Printer = {
   reachable: boolean
   /** What it takes: by the sizes it reports, or set by hand. */
   takes: PrinterTakes
-  /** Does the label asked about fit? Empty when no label was asked about;
-   *  "unknown" when the printer never said which sizes it takes. */
-  fit: '' | 'yes' | 'no' | 'unknown'
+  /** Does the label asked about fit? "maybe": only within a range of sizes
+   *  its driver accepts, which many drivers do for nearly any size. Empty
+   *  when no label was asked about; "unknown" when the printer never said
+   *  which sizes it takes. */
+  fit: '' | 'yes' | 'maybe' | 'no' | 'unknown'
 }
 
 export type PrinterTakes = 'auto' | 'continuous' | 'fixed' | 'any'
@@ -192,32 +194,39 @@ export function rememberPrinter(docId: string, name: string) {
   window.localStorage.setItem(printerKeyFor(docId), name)
 }
 
-/** The printer to preselect for a label: the one chosen for it before, the
- *  one chosen last, the default, as long as the label fits it; otherwise
- *  the first printer it does fit. */
+/** The printer to preselect for a label: the one chosen for it before,
+ *  unless the label does not fit it; else the one chosen last or the
+ *  default, if the label fits it; else the first printer it fits. */
 export function choosePrinter(printers: Printer[], docId: string): string {
   const named = (name: string | null | undefined) => printers.find((item) => item.name === name)
-  const usable = (printer: Printer | undefined) => printer !== undefined && printer.fit !== 'no'
-  const defaultPrinter = printers.find((item) => item.is_default)
-  const wishes = [
-    named(window.localStorage.getItem(printerKeyFor(docId))),
-    named(window.localStorage.getItem(PRINTER_KEY)),
-    defaultPrinter,
-  ]
+  const fits = (printer: Printer | undefined) => printer !== undefined && (printer.fit === 'yes' || printer.fit === '')
+  const possible = (printer: Printer | undefined) => printer !== undefined && printer.fit !== 'no'
+  const forLabel = named(window.localStorage.getItem(printerKeyFor(docId)))
+  const others = [named(window.localStorage.getItem(PRINTER_KEY)), printers.find((item) => item.is_default)]
   const chosen =
-    wishes.find(usable) ??
-    printers.find((item) => item.fit === 'yes') ??
-    printers.find(usable) ??
-    wishes.find(Boolean) ??
+    (possible(forLabel) ? forLabel : undefined) ??
+    others.find(fits) ??
+    printers.find(fits) ??
+    others.find(possible) ??
+    printers.find(possible) ??
+    forLabel ??
+    others.find(Boolean) ??
     printers[0]
   return chosen?.name ?? ''
 }
 
-/** Printers the label fits first, then the ones we cannot tell, then the
- *  rest; otherwise as listed. */
+/** Printers the label fits first, then the ones it may fit or we cannot
+ *  tell, then the rest; otherwise as listed. */
 export function byFit(printers: Printer[]): Printer[] {
-  const rank = (printer: Printer) => (printer.fit === 'yes' ? 0 : printer.fit === 'no' ? 2 : 1)
-  return [...printers].sort((a, b) => rank(a) - rank(b))
+  const rank = { yes: 0, '': 0, maybe: 1, unknown: 2, no: 3 }
+  return [...printers].sort((a, b) => rank[a.fit] - rank[b.fit])
+}
+
+/** The printer's name in a list, with a word on whether the label fits. */
+export function printerOption(t: Translate, printer: Printer, name = printer.name): string {
+  if (printer.fit === 'no') return t('print.doesNotFit', { name })
+  if (printer.fit === 'maybe') return t('print.mayNotFit', { name })
+  return name
 }
 
 const mm = (points: number) => (points / (72 / 25.4)).toFixed(1).replace(/\.0$/, '')
@@ -226,6 +235,12 @@ const mm = (points: number) => (points / (72 / 25.4)).toFixed(1).replace(/\.0$/,
 export function fitProblem(t: Translate, printer: Printer, page: PageQuestion | null): string | null {
   if (!page || printer.fit === 'yes' || printer.fit === '') return null
   if (printer.fit === 'unknown') return t('printers.fit.unknown')
+  if (printer.fit === 'maybe') {
+    return t(page.continuous ? 'printers.fit.maybeTape' : 'printers.fit.maybeSize', {
+      width: mm(page.widthPt),
+      height: mm(page.heightPt),
+    })
+  }
   if (printer.takes === 'continuous') return t('printers.fit.onlyContinuous')
   if (printer.takes === 'fixed') return t('printers.fit.onlyFixed')
   return t(page.continuous ? 'printers.fit.noTape' : 'printers.fit.noSize', {

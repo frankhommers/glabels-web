@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..printing import Printer, PrintingError, PrintingUnavailable
 from ..printing.ipp_client import JOB_STATE_NAMES, UNKNOWN_STATE
-from ..printing.media import TAKES, fits
+from ..printing.media import TAKES, judge
 from .deps import AppState, state
 from .routes_lists import rows_printed
 
@@ -41,8 +41,9 @@ class PrinterOut(BaseModel):
     reachable: bool = False
     # What it takes: by the sizes it reports (auto), or set by hand.
     takes: str = "auto"
-    # Does the label asked about fit: "yes", "no", or "unknown" when the
-    # printer never reported its sizes. Empty when no label was asked about.
+    # Does the label asked about fit: "yes", "maybe" (only within a range of
+    # sizes the driver accepts), "no", or "unknown" when the printer never
+    # reported its sizes. Empty when no label was asked about. See `judge`.
     fit: str = ""
 
 
@@ -129,8 +130,7 @@ def _base(printer: Printer) -> PrinterOut:
 def _fit(printer: Printer, page: tuple[float, float] | None, continuous: bool) -> str:
     if page is None:
         return ""
-    verdict = fits(list(printer.media), page, continuous=continuous, takes=printer.takes)
-    return "unknown" if verdict is None else "yes" if verdict else "no"
+    return judge(list(printer.media), page, continuous=continuous, takes=printer.takes)
 
 
 @router.get("", response_model=PrinterListOut)

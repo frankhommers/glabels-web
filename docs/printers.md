@@ -42,18 +42,30 @@ itself as an IPP `Print-Job` and afterwards asks for the state with
 ## Which printers a label fits
 
 The same match tells which printers a label fits. The Print page and the
-phone judge every printer by the page that gets printed: a printer with a
-size or range for it fits, one without does not, and one that never
-reported its sizes is "unknown". This works for any IPP printer, because it
-only uses the standard PWG media names.
+phone judge every printer by the page that gets printed. This works for any
+IPP printer, because it only uses the standard PWG media names.
 
-- Printers the label fits come first; the others are marked "does not fit",
-  with the reason under the list. Printing to one asks first: the label may
-  come out scaled or cut off.
-- The printer preselected is the one chosen for this label before, else the
-  one chosen last, else the default, as long as the label fits it;
-  otherwise the first printer it does fit. The choice is kept per browser
-  or phone.
+- **fits**: the printer has this size. For a label on a continuous roll
+  (tape), a medium as wide and at least as long counts too (a tape printer
+  reports `custom_9.03x1411.11mm_…` for its 9 mm tape), as does a
+  `roll_min_…`/`roll_max_…` range.
+- **may not fit**: it only fits a `custom_min_…`/`custom_max_…` range. Many
+  drivers accept nearly any size that way, also on a label printer that has
+  no tape at all (the DYMO LabelWriter 450 DUO's label side takes
+  3.53 × 3.53 mm up to 56.9 × 2709 mm), so this is a hint, not a match.
+- **does not fit**: nothing matches.
+- **unknown**: the printer never reported its sizes.
+
+What you see:
+
+- Printers the label fits come first, then the ones it may fit, then the
+  rest, marked "does not fit", with the reason under the list. Printing to
+  a printer the label does not fit asks first: it may come out scaled or
+  cut off.
+- The printer preselected is the one chosen for this label before, unless
+  the label does not fit it; else the one chosen last or the default, if
+  the label fits it; else the first printer it fits. The choice is kept per
+  browser or phone.
 - The sizes are remembered from the last time the printer was asked (when
   adding it, and whenever the Print page asks for the state). A printer
   never heard from is asked once, when a label is judged by it.

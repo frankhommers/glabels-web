@@ -126,15 +126,50 @@ def choose_media(supported: list[str], page_pt: tuple[float, float]) -> str | No
     return None
 
 
-def fits(supported: list[str], page_pt: tuple[float, float], *, continuous: bool, takes: str = "auto") -> bool | None:
-    """Can this printer print the page as it is? `None`: we cannot tell,
-    because the printer reported no sizes."""
+def _fixed_sizes(supported: list[str]) -> list[MediaSize]:
+    return [size for keyword in supported if not _RANGE.match(keyword) and (size := parse_media(keyword))]
+
+
+def _roll_of_width(supported: list[str], width_mm: float, length_mm: float) -> bool:
+    """A medium as wide as the label and at least as long: a roll (tape) of
+    that width, as a tape printer reports its tapes."""
+    for size in _fixed_sizes(supported):
+        for w, h in ((size.width_mm, size.height_mm), (size.height_mm, size.width_mm)):
+            if abs(w - width_mm) <= TOLERANCE_MM and h >= length_mm - TOLERANCE_MM:
+                return True
+    return False
+
+
+def judge(supported: list[str], page_pt: tuple[float, float], *, continuous: bool, takes: str = "auto") -> str:
+    """Does the page fit this printer?
+
+    - ``yes``: the printer has this size; for a label on a continuous roll,
+      a medium of that width at least as long, or a roll range it fits in.
+    - ``maybe``: it only fits a range of sizes the driver accepts. Many
+      drivers accept nearly any size, also on a printer that has no tape
+      or no such label loaded; then it is up to the person printing.
+    - ``no``: nothing matches.
+    - ``unknown``: the printer reported no sizes.
+    """
     if takes == "any":
-        return True
+        return "yes"
     if takes == "continuous":
-        return continuous
+        return "yes" if continuous else "no"
     if takes == "fixed":
-        return not continuous
+        return "no" if continuous else "yes"
     if not supported:
-        return None
-    return choose_media(supported, page_pt) is not None
+        return "unknown"
+    keyword = choose_media(supported, page_pt)
+    if keyword is None:
+        return "no"
+    if keyword in supported:
+        return "yes"  # one of its own sizes
+    width_mm, height_mm = sorted(value / POINTS_PER_MM for value in page_pt)
+    if continuous:
+        # The narrow side is the width of the roll.
+        if _roll_of_width(supported, width_mm, height_mm):
+            return "yes"
+        rolls = [item for item in supported if item.startswith(("roll_min_", "roll_max_"))]
+        if any(r.holds(width_mm, height_mm) or r.holds(height_mm, width_mm) for r in media_ranges(rolls)):
+            return "yes"
+    return "maybe"

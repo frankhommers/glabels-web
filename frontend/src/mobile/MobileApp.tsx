@@ -18,6 +18,7 @@ import {
   choosePrinter,
   fitProblem,
   newRequestId,
+  printerOption,
   printers as printerApi,
   rememberPrinter,
   type PageQuestion,
@@ -537,13 +538,13 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
                 >
                   {byFit(printerList).map((item) => (
                     <option key={item.name} value={item.name}>
-                      {item.fit === 'no' ? t('print.doesNotFit', { name: item.name }) : item.name}
+                      {printerOption(t, item)}
                     </option>
                   ))}
                 </select>
               </label>
             ) : null}
-            {fitWarning && selectedPrinter?.fit === 'no' ? <p className="mobile-note">{fitWarning}</p> : null}
+            {fitWarning && (selectedPrinter?.fit === 'no' || selectedPrinter?.fit === 'maybe') ? <p className="mobile-note">{fitWarning}</p> : null}
           </>
         ) : null}
       </main>

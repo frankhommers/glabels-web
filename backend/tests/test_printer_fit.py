@@ -13,7 +13,7 @@ from glabels_web.printing import PrinterRegistry, ProbeResult
 
 MM = 72 / 25.4
 
-TAPE = ["custom_12.14x50.8mm_12.14x50.8mm", "custom_min_1.41x5.64mm", "custom_max_18.06x1411.11mm"]
+TAPE = ["custom_12.14x50.8mm_12.14x50.8mm", "custom_12.14x1411.11mm_12.14x1411.11mm", "custom_min_1.41x5.64mm", "custom_max_18.06x1411.11mm"]
 LABELS = ["custom_27.86x88.9mm_27.86x88.9mm", "custom_54.19x22.27mm_54.19x22.27mm"]
 
 

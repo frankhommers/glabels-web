@@ -2,7 +2,7 @@
 
 import pytest
 
-from glabels_web.printing.media import choose_media, fits, media_ranges, parse_media
+from glabels_web.printing.media import choose_media, judge, media_ranges, parse_media
 
 MM = 72 / 25.4
 
@@ -91,21 +91,33 @@ def test_only_a_complete_range_counts():
     assert len(media_ranges(["roll_min_10x10mm", "roll_max_60x3000mm", *OFFICE])) == 2
 
 
+# A label printer whose driver takes nearly any size, as the DYMO
+# LabelWriter 450 DUO's label side reports through CUPS.
+DUO_LABEL = [*DYMO, "custom_12.7x47.67mm_12.7x47.67mm", "custom_min_3.53x3.53mm", "custom_max_56.9x2709.33mm"]
+QL = ["custom_62x100mm_62x100mm", "roll_min_12x25mm", "roll_max_62x1000mm"]
+
+
 @pytest.mark.parametrize(
     ("supported", "page_mm", "continuous", "takes", "expected"),
     [
-        (DUO_TAPE, (9, 67), True, "auto", True),
-        (DYMO, (9, 67), True, "auto", False),  # a label printer has no tape
-        (DUO_TAPE, (28, 89), False, "auto", False),  # nor a tape printer address labels
-        (OFFICE, (210, 297), False, "auto", True),
-        ([], (28, 89), False, "auto", None),  # nothing reported: we cannot tell
-        ([], (9, 67), True, "continuous", True),
-        (DUO_TAPE, (28, 89), False, "continuous", False),
-        (DYMO, (9, 67), True, "fixed", False),
-        (DYMO, (9, 67), False, "fixed", True),
-        (DYMO, (500, 500), False, "any", True),
+        (DUO_TAPE, (9, 67), True, "auto", "yes"),  # a 9 mm tape
+        (DUO_TAPE, (67, 9), True, "auto", "yes"),  # on its side
+        (DYMO, (9, 67), True, "auto", "no"),  # a label printer has no tape
+        (DUO_LABEL, (9, 67), True, "auto", "maybe"),  # its driver would take it
+        (DUO_LABEL, (12, 67), True, "auto", "maybe"),  # 12.7 mm labels are too short
+        (DUO_TAPE, (28, 89), False, "auto", "no"),  # nor a tape printer address labels
+        (DUO_LABEL, (28, 89), False, "auto", "yes"),
+        (QL, (29, 90), True, "auto", "yes"),  # inside the roll range
+        (OFFICE, (210, 297), False, "auto", "yes"),
+        (OFFICE, (100, 150), False, "auto", "maybe"),  # manual feed, perhaps
+        ([], (28, 89), False, "auto", "unknown"),  # nothing reported: we cannot tell
+        ([], (9, 67), True, "continuous", "yes"),
+        (DUO_TAPE, (28, 89), False, "continuous", "no"),
+        (DYMO, (9, 67), True, "fixed", "no"),
+        (DYMO, (9, 67), False, "fixed", "yes"),
+        (DYMO, (500, 500), False, "any", "yes"),
     ],
 )
-def test_fits(supported, page_mm, continuous, takes, expected):
+def test_judge(supported, page_mm, continuous, takes, expected):
     page = (page_mm[0] * MM, page_mm[1] * MM)
-    assert fits(supported, page, continuous=continuous, takes=takes) is expected
+    assert judge(supported, page, continuous=continuous, takes=takes) == expected

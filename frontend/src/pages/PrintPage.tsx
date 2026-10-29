@@ -14,6 +14,7 @@ import {
   choosePrinter,
   fitProblem,
   newRequestId,
+  printerOption,
   printerState,
   printers as printerApi,
   rememberPrinter,
@@ -261,7 +262,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
                   const name = item.is_default ? t('print.default', { name: item.name }) : item.name
                   return (
                     <option key={item.name} value={item.name}>
-                      {item.fit === 'no' ? t('print.doesNotFit', { name }) : name}
+                      {printerOption(t, item, name)}
                     </option>
                   )
                 })
