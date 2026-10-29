@@ -29,10 +29,37 @@ itself as an IPP `Print-Job` and afterwards asks for the state with
 - The printer's media size that matches the PDF page (within 1.5 mm, in either
   orientation) is sent along as `media`. Without it the print server prints on
   its default size and scales the page to it; a DYMO defaulting to a shipping
-  label then blows an address label up to twice its size. If no size matches,
-  the printer chooses, as before.
+  label then blows an address label up to twice its size. A printer can also
+  report a range it takes any size within (`custom_min_…` / `custom_max_…`,
+  or `roll_min_…` / `roll_max_…`): a tape printer reports its tapes that way.
+  A page inside such a range is sent as a size of its own
+  (`custom_9.17x67.38mm_9.17x67.38mm`). If nothing matches, the printer
+  chooses, as before.
 - The list of printers is ours and lives in SQLite: a name for an IPP
-  address, nothing more. State and jobs come straight from the printer.
+  address, the media sizes it reported last, and what it takes. State and
+  jobs come straight from the printer.
+
+## Which printers a label fits
+
+The same match tells which printers a label fits. The Print page and the
+phone judge every printer by the page that gets printed: a printer with a
+size or range for it fits, one without does not, and one that never
+reported its sizes is "unknown". This works for any IPP printer, because it
+only uses the standard PWG media names.
+
+- Printers the label fits come first; the others are marked "does not fit",
+  with the reason under the list. Printing to one asks first: the label may
+  come out scaled or cut off.
+- The printer preselected is the one chosen for this label before, else the
+  one chosen last, else the default, as long as the label fits it;
+  otherwise the first printer it does fit. The choice is kept per browser
+  or phone.
+- The sizes are remembered from the last time the printer was asked (when
+  adding it, and whenever the Print page asks for the state). A printer
+  never heard from is asked once, when a label is judged by it.
+- When a printer reports nonsense, set by hand what it takes, under
+  Manage printers…: *what it reports* (the default), *tape and rolls only*,
+  *labels and sheets only*, or *everything*.
 - There is no queue that holds jobs and nothing is converted. A printer that
   does not accept PDF is therefore refused when adding it, rather than a print
   coming out differently later.

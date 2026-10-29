@@ -17,7 +17,18 @@ export type Printer = {
   accepting: boolean
   make_and_model: string
   reachable: boolean
+  /** What it takes: by the sizes it reports, or set by hand. */
+  takes: PrinterTakes
+  /** Does the label asked about fit? Empty when no label was asked about;
+   *  "unknown" when the printer never said which sizes it takes. */
+  fit: '' | 'yes' | 'no' | 'unknown'
 }
+
+export type PrinterTakes = 'auto' | 'continuous' | 'fixed' | 'any'
+
+/** A label to judge the printers by: the size of its page, and whether it
+ *  is on a continuous roll (tape). */
+export type PageQuestion = { widthPt: number; heightPt: number; continuous: boolean }
 
 export type PrinterList = {
   available: boolean
@@ -92,10 +103,24 @@ const asJson = (body: unknown): RequestInit => ({
 export const printers = {
   /** With `status`, every printer is asked for its state, which can take a
    *  few seconds; without it the list comes straight from our own records. */
-  list: (status = true) =>
-    fetch(status ? '/api/printers' : '/api/printers?status=false').then((response) =>
-      json<PrinterList>(response),
-    ),
+  list: (status = true, page?: PageQuestion) => {
+    const query = new URLSearchParams()
+    if (!status) query.set('status', 'false')
+    if (page) {
+      query.set('page_width_pt', String(page.widthPt))
+      query.set('page_height_pt', String(page.heightPt))
+      query.set('continuous', String(page.continuous))
+    }
+    const suffix = query.toString() ? `?${query}` : ''
+    return fetch(`/api/printers${suffix}`).then((response) => json<PrinterList>(response))
+  },
+
+  setTakes: (name: string, takes: PrinterTakes) =>
+    fetch(`/api/printers/${encodeURIComponent(name)}/takes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ takes }),
+    }).then((response) => json<Printer>(response)),
 
   probe: (uri: string) =>
     fetch('/api/printers/probe', asJson({ uri })).then((response) => json<ProbeResult>(response)),
@@ -155,4 +180,56 @@ export function newRequestId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/** The printer chosen last, in this browser or on this phone. */
+const PRINTER_KEY = 'glabels-web.printer'
+const printerKeyFor = (docId: string) => `${PRINTER_KEY}.${docId}`
+
+/** Remember the printer chosen, for this label and as the latest overall. */
+export function rememberPrinter(docId: string, name: string) {
+  window.localStorage.setItem(PRINTER_KEY, name)
+  window.localStorage.setItem(printerKeyFor(docId), name)
+}
+
+/** The printer to preselect for a label: the one chosen for it before, the
+ *  one chosen last, the default, as long as the label fits it; otherwise
+ *  the first printer it does fit. */
+export function choosePrinter(printers: Printer[], docId: string): string {
+  const named = (name: string | null | undefined) => printers.find((item) => item.name === name)
+  const usable = (printer: Printer | undefined) => printer !== undefined && printer.fit !== 'no'
+  const defaultPrinter = printers.find((item) => item.is_default)
+  const wishes = [
+    named(window.localStorage.getItem(printerKeyFor(docId))),
+    named(window.localStorage.getItem(PRINTER_KEY)),
+    defaultPrinter,
+  ]
+  const chosen =
+    wishes.find(usable) ??
+    printers.find((item) => item.fit === 'yes') ??
+    printers.find(usable) ??
+    wishes.find(Boolean) ??
+    printers[0]
+  return chosen?.name ?? ''
+}
+
+/** Printers the label fits first, then the ones we cannot tell, then the
+ *  rest; otherwise as listed. */
+export function byFit(printers: Printer[]): Printer[] {
+  const rank = (printer: Printer) => (printer.fit === 'yes' ? 0 : printer.fit === 'no' ? 2 : 1)
+  return [...printers].sort((a, b) => rank(a) - rank(b))
+}
+
+const mm = (points: number) => (points / (72 / 25.4)).toFixed(1).replace(/\.0$/, '')
+
+/** Why a label does not fit a printer, or may not; `null` when it does. */
+export function fitProblem(t: Translate, printer: Printer, page: PageQuestion | null): string | null {
+  if (!page || printer.fit === 'yes' || printer.fit === '') return null
+  if (printer.fit === 'unknown') return t('printers.fit.unknown')
+  if (printer.takes === 'continuous') return t('printers.fit.onlyContinuous')
+  if (printer.takes === 'fixed') return t('printers.fit.onlyFixed')
+  return t(page.continuous ? 'printers.fit.noTape' : 'printers.fit.noSize', {
+    width: mm(page.widthPt),
+    height: mm(page.heightPt),
+  })
 }

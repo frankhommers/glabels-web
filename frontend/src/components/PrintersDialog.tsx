@@ -6,14 +6,27 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { printerState, printers as api, type Printer, type PrinterList, type ProbeResult } from '../api/printers'
+import {
+  printerState,
+  printers as api,
+  type Printer,
+  type PageQuestion,
+  type PrinterList,
+  type PrinterTakes,
+  type ProbeResult,
+} from '../api/printers'
 import { useDialogs } from '../ui/dialogs'
 import { useT } from '../i18n'
 
+const TAKES: PrinterTakes[] = ['auto', 'continuous', 'fixed', 'any']
+
 export function PrintersDialog({
+  page,
   onClose,
   onChanged,
 }: {
+  /** The label being printed: the list says which printers it fits. */
+  page?: PageQuestion | null
   onClose: () => void
   onChanged: (list: PrinterList) => void
 }) {
@@ -32,13 +45,15 @@ export function PrintersDialog({
 
   const reload = useCallback(async () => {
     try {
-      const result = await api.list()
+      const result = await api.list(true, page ?? undefined)
       setList(result)
       onChanged(result)
     } catch (error) {
       setProblem(String(error instanceof Error ? error.message : error))
     }
-  }, [onChanged])
+    // The page as numbers: a new object with the same size is the same page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onChanged, page?.widthPt, page?.heightPt, page?.continuous])
 
   useEffect(() => {
     void reload()
@@ -125,6 +140,7 @@ export function PrintersDialog({
                 <th>{t('printers.name')}</th>
                 <th>{t('printers.destination')}</th>
                 <th>{t('printers.status')}</th>
+                <th title={t('printers.takesHint')}>{t('printers.takes')}</th>
                 <th>{t('printers.default')}</th>
                 <th />
               </tr>
@@ -132,7 +148,7 @@ export function PrintersDialog({
             <tbody>
               {list?.printers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="placeholder">
+                  <td colSpan={6} className="placeholder">
                     {t('printers.none')}
                   </td>
                 </tr>
@@ -155,13 +171,36 @@ export function PrintersDialog({
                     <td className="merge-source">{printer.uri}</td>
                     <td>
                       {printerState(t, printer)}
-                      {printer.reachable && !printer.accepting ? ' · neemt niets aan' : ''}
+                      {printer.reachable && !printer.accepting ? ` · ${t('print.notAccepting')}` : ''}
                       {printer.state_message ? (
                         <>
                           <br />
                           <small className="muted">{printer.state_message}</small>
                         </>
                       ) : null}
+                    </td>
+                    <td>
+                      <select
+                        value={printer.takes}
+                        disabled={busy}
+                        title={t('printers.takesHint')}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={async (event) => {
+                          setProblem(null)
+                          try {
+                            await api.setTakes(printer.name, event.target.value as PrinterTakes)
+                            await reload()
+                          } catch (error) {
+                            setProblem(String(error instanceof Error ? error.message : error))
+                          }
+                        }}
+                      >
+                        {TAKES.map((takes) => (
+                          <option key={takes} value={takes}>
+                            {t(`printers.takes.${takes}`)}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td>
                       {printer.is_default ? (

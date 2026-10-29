@@ -6,10 +6,21 @@
  *  second rendering that could differ from it.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { lists, type LabelList } from '../api/lists'
-import { newRequestId, printerState, printers as printerApi, type PrintJob, type PrinterList } from '../api/printers'
+import {
+  byFit,
+  choosePrinter,
+  fitProblem,
+  newRequestId,
+  printerState,
+  printers as printerApi,
+  rememberPrinter,
+  type PageQuestion,
+  type PrintJob,
+  type PrinterList,
+} from '../api/printers'
 import type { MessageKey, Translate } from '../i18n'
 import { useDialogs } from '../ui/dialogs'
 import type { PreviewInfo, PrintSettings, Template } from '../api/types'
@@ -42,9 +53,6 @@ function jobStatus(t: Translate, job: PrintJob): string {
   return key ? t(key) : t('common.unknown')
 }
 
-/** The printer this browser chose last. */
-const PRINTER_KEY = 'glabels-web.printer'
-
 export function PrintPage({ session, template }: { session: Session; template: Template | null }) {
   const t = session.t
   const dialogs = useDialogs()
@@ -59,12 +67,15 @@ export function PrintPage({ session, template }: { session: Session; template: T
   const [problem, setProblem] = useState<string | null>(null)
   const [mode, setMode] = useState<'sheets' | 'positions'>(printSettings.sheets ? 'sheets' : 'positions')
   const [printerList, setPrinterList] = useState<PrinterList | null>(null)
-  // The printer chosen last in this browser, also after leaving this page;
-  // the phone remembers its own the same way.
-  const [printer, setPrinterState] = useState<string>(() => window.localStorage.getItem(PRINTER_KEY) ?? '')
+  // The printer chosen for this label before, in this browser; the phone
+  // remembers its own the same way. A printer the label does not fit is
+  // passed over, unless it was chosen here and now.
+  const [printer, setPrinterState] = useState('')
+  const chosenHere = useRef(false)
   const setPrinter = (name: string) => {
+    chosenHere.current = true
     setPrinterState(name)
-    window.localStorage.setItem(PRINTER_KEY, name)
+    if (detail) rememberPrinter(detail.id, name)
   }
   const [managing, setManaging] = useState(false)
   const [jobs, setJobs] = useState<PrintJob[]>([])
@@ -77,19 +88,28 @@ export function PrintPage({ session, template }: { session: Session; template: T
   // Changes whenever the rows still to print change, so the preview follows.
   const listStamp = pendingOnly && list ? list.rows.filter((row) => !row.printed).map((row) => `${row.id}:${row.copies}`).join(',') : ''
 
+  // The label the printers are judged by: the size of the page printed.
+  const docId = detail?.id ?? ''
+  const continuous = detail?.label_min_length_pt != null
+  const pageWidth = info?.page_width_pt ?? 0
+  const pageHeight = info?.page_height_pt ?? 0
+  const pageQuestion: PageQuestion | null =
+    pageWidth > 0 && pageHeight > 0 ? { widthPt: pageWidth, heightPt: pageHeight, continuous } : null
+
   const loadPrinters = useCallback(async () => {
+    const page = pageWidth > 0 && pageHeight > 0 ? { widthPt: pageWidth, heightPt: pageHeight, continuous } : undefined
     try {
-      const result = await printerApi.list()
+      const result = await printerApi.list(true, page)
       setPrinterList(result)
-      // The one chosen before, as long as it still exists; otherwise the default.
-      setPrinterState((current) => {
-        if (current && result.printers.some((item) => item.name === current)) return current
-        return result.printers.find((item) => item.is_default)?.name ?? result.printers[0]?.name ?? ''
-      })
+      setPrinterState((current) =>
+        chosenHere.current && result.printers.some((item) => item.name === current)
+          ? current
+          : choosePrinter(result.printers, docId),
+      )
     } catch {
       setPrinterList(null)
     }
-  }, [])
+  }, [docId, pageWidth, pageHeight, continuous])
 
   // How many jobs are shown; "Show more" raises this.
   const [jobLimit, setJobLimit] = useState(JOB_PAGE)
@@ -135,9 +155,12 @@ export function PrintPage({ session, template }: { session: Session; template: T
     }
   }
 
+  // Once the preview tells the page size: the printers are judged by it.
+  // Without a preview (nothing to print) they are listed all the same.
+  const previewDone = info !== null || problem !== null
   useEffect(() => {
-    void loadPrinters()
-  }, [loadPrinters])
+    if (previewDone) void loadPrinters()
+  }, [loadPrinters, previewDone])
 
   useEffect(() => {
     void loadJobs()
@@ -188,8 +211,18 @@ export function PrintPage({ session, template }: { session: Session; template: T
   const landscape = info ? info.page_width_pt > info.page_height_pt : false
   const selectedPrinter = printerList?.printers.find((item) => item.name === printer) ?? null
 
+  const fitWarning = selectedPrinter ? fitProblem(t, selectedPrinter, pageQuestion) : null
+
   const submitPrint = async () => {
     if (!printer) return
+    if (selectedPrinter?.fit === 'no' && fitWarning) {
+      const confirmed = await dialogs.confirm({
+        title: t('print.fitTitle'),
+        message: t('print.fitQuestion', { reason: fitWarning }),
+        confirmLabel: t('print.printAnyway'),
+      })
+      if (!confirmed) return
+    }
     setPrinting(true)
     setPrintMessage(null)
     try {
@@ -224,11 +257,14 @@ export function PrintPage({ session, template }: { session: Session; template: T
               onChange={(event) => setPrinter(event.target.value)}
             >
               {printerList?.printers.length ? (
-                printerList.printers.map((item) => (
-                  <option key={item.name} value={item.name}>
-                    {item.is_default ? t('print.default', { name: item.name }) : item.name}
-                  </option>
-                ))
+                byFit(printerList.printers).map((item) => {
+                  const name = item.is_default ? t('print.default', { name: item.name }) : item.name
+                  return (
+                    <option key={item.name} value={item.name}>
+                      {item.fit === 'no' ? t('print.doesNotFit', { name }) : name}
+                    </option>
+                  )
+                })
               ) : (
                 <option value="">{t('print.noPrinter')}</option>
               )}
@@ -242,6 +278,9 @@ export function PrintPage({ session, template }: { session: Session; template: T
                 : ''}
               {selectedPrinter.make_and_model ? ` · ${selectedPrinter.make_and_model}` : ''}
             </p>
+          ) : null}
+          {fitWarning ? (
+            <p className={selectedPrinter?.fit === 'no' ? 'inline-warning' : 'form-static muted'}>{fitWarning}</p>
           ) : null}
           <div className="form-row">
             <label />
@@ -487,6 +526,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
 
       {managing ? (
         <PrintersDialog
+          page={pageQuestion}
           onClose={() => {
             setManaging(false)
             void loadPrinters()

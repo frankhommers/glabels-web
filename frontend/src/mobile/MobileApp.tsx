@@ -13,7 +13,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { newRequestId, printers as printerApi, type Printer } from '../api/printers'
+import {
+  byFit,
+  choosePrinter,
+  fitProblem,
+  newRequestId,
+  printers as printerApi,
+  rememberPrinter,
+  type PageQuestion,
+  type Printer,
+} from '../api/printers'
 import type { DocumentDetail, DocumentListItem, DocumentObject, PrintSettings, TextObject } from '../api/types'
 import { applyFonts, fetchFonts } from '../app/fonts'
 import { DEFAULT_PRINT_SETTINGS } from '../app/session'
@@ -28,9 +37,6 @@ function idFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/m\/([0-9a-f-]{36})\/?$/i)
   return match ? match[1] : null
 }
-
-/** The printer this phone chose last. */
-const PRINTER_KEY = 'glabels-web.printer'
 
 // The preview is page 1 of exactly what gets printed.
 const PREVIEW_SETTINGS: PrintSettings = { ...DEFAULT_PRINT_SETTINGS, copies: 1, sheets: null }
@@ -136,6 +142,8 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [copies, setCopies] = useState(1)
   const [printerList, setPrinterList] = useState<Printer[] | null>(null)
   const [printer, setPrinter] = useState('')
+  // The label the printers are judged by: the size of the page printed.
+  const [pageQuestion, setPageQuestion] = useState<PageQuestion | null>(null)
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [printState, setPrintState] = useState<PrintState>({ phase: 'idle' })
@@ -149,6 +157,8 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [sheetPage, setSheetPage] = useState(1)
   const [sheetPages, setSheetPages] = useState(1)
   const listMode = Boolean(list?.available && list.fields.length > 0)
+  const selectedPrinter = printerList?.find((item) => item.name === printer) ?? null
+  const fitWarning = selectedPrinter ? fitProblem(t, selectedPrinter, pageQuestion) : null
 
   // Typing saves after a short pause; printing waits for that save.
   const dirty = useRef(false)
@@ -168,22 +178,42 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
         setFontsOf(textObjects(loaded.content.objects))
       })
       .catch((error) => setProblem(String(error instanceof Error ? error.message : error)))
-    printerApi
-      .list(false)
-      .then((list) => {
-        setPrinterList(list.printers)
-        // The printer this phone used last, if it still exists; otherwise the
-        // default. A phone is usually next to one particular printer.
-        const remembered = window.localStorage.getItem(PRINTER_KEY)
-        const known = list.printers.some((item) => item.name === remembered)
-        setPrinter(
-          known && remembered
-            ? remembered
-            : (list.printers.find((item) => item.is_default)?.name ?? list.printers[0]?.name ?? ''),
-        )
-      })
-      .catch(() => setPrinterList([]))
   }, [id])
+
+  // The printers, judged by the label's page: the printer this phone chose
+  // for this label before, or chose last, or the default, as long as the
+  // label fits it. A phone is usually next to one particular printer.
+  // The page size does not change with the text, so once per label.
+  const loaded = detail !== null
+  const continuous = detail?.label_min_length_pt != null
+  useEffect(() => {
+    if (!loaded) return
+    let cancelled = false
+    const load = async () => {
+      let page: PageQuestion | null = null
+      try {
+        const info = await api.previewInfo(id, PREVIEW_SETTINGS)
+        page = { widthPt: info.page_width_pt, heightPt: info.page_height_pt, continuous }
+      } catch {
+        // Without a preview the printers are listed all the same.
+      }
+      try {
+        const list = await printerApi.list(false, page ?? undefined)
+        if (cancelled) return
+        setPageQuestion(page)
+        setPrinterList(list.printers)
+        setPrinter((current) =>
+          current && list.printers.some((item) => item.name === current) ? current : choosePrinter(list.printers, id),
+        )
+      } catch {
+        if (!cancelled) setPrinterList([])
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [id, loaded, continuous])
 
   // How many pages the whole print has, for paging through it.
   const pendingStamp = list?.rows.filter((row) => !row.printed).map((row) => `${row.id}:${row.copies}`).join(',') ?? ''
@@ -283,6 +313,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
 
   const print = async () => {
     if (!detail || !printer) return
+    if (fitWarning && selectedPrinter?.fit === 'no') {
+      if (!window.confirm(t('print.fitQuestion', { reason: fitWarning }))) return
+    }
     setProblem(null)
     setPrintState({ phase: 'sending' })
     try {
@@ -499,17 +532,18 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
                   value={printer}
                   onChange={(event) => {
                     setPrinter(event.target.value)
-                    window.localStorage.setItem(PRINTER_KEY, event.target.value)
+                    rememberPrinter(id, event.target.value)
                   }}
                 >
-                  {printerList.map((item) => (
+                  {byFit(printerList).map((item) => (
                     <option key={item.name} value={item.name}>
-                      {item.name}
+                      {item.fit === 'no' ? t('print.doesNotFit', { name: item.name }) : item.name}
                     </option>
                   ))}
                 </select>
               </label>
             ) : null}
+            {fitWarning && selectedPrinter?.fit === 'no' ? <p className="mobile-note">{fitWarning}</p> : null}
           </>
         ) : null}
       </main>

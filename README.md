@@ -52,6 +52,10 @@ project.
   jobs. The PDF goes straight to the printer; no print service runs. The
   printer's media size that matches the label is sent along, so a label
   printer does not scale to its default label.
+- Printers are judged by the label: a tape goes to the tape printer, an
+  address label to the label printer. Printers the label does not fit are
+  marked, and printing to one asks first. See
+  [Which printers a label fits](docs/printers.md#which-printers-a-label-fits).
 - The interface in English and Dutch.
 - A phone view for printing on the go: pick a label, change its text,
   choose the number of copies and print. See *On a phone* below.
@@ -220,8 +224,9 @@ values. The Merge page says so; fix it with **Edit…**.
 A phone opening the application gets a view made for printing, not for
 designing: a list of labels, and per label its text, a preview, the number
 of copies and a print button. The printer is always shown; with more than
-one it can be chosen, and the phone remembers its choice (falling back to
-the default printer if that one disappears). Text
+one it can be chosen, and the phone remembers its choice per label (falling
+back to a printer the label fits, the default first, if that one
+disappears or does not take the label). Text
 changes are saved as you type and end up in the project, like any other
 edit. The preview is the same PDF that gets printed.
 

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..printing import Printer, PrintingError, PrintingUnavailable
 from ..printing.ipp_client import JOB_STATE_NAMES, UNKNOWN_STATE
+from ..printing.media import TAKES, fits
 from .deps import AppState, state
 from .routes_lists import rows_printed
 
@@ -38,6 +39,15 @@ class PrinterOut(BaseModel):
     accepting: bool = False
     make_and_model: str = ""
     reachable: bool = False
+    # What it takes: by the sizes it reports (auto), or set by hand.
+    takes: str = "auto"
+    # Does the label asked about fit: "yes", "no", or "unknown" when the
+    # printer never reported its sizes. Empty when no label was asked about.
+    fit: str = ""
+
+
+class TakesRequest(BaseModel):
+    takes: str = Field(pattern="^(" + "|".join(TAKES) + ")$")
 
 
 class PrinterListOut(BaseModel):
@@ -112,14 +122,28 @@ def _base(printer: Printer) -> PrinterOut:
         info=printer.info,
         location=printer.location,
         is_default=printer.is_default,
+        takes=printer.takes,
     )
+
+
+def _fit(printer: Printer, page: tuple[float, float] | None, continuous: bool) -> str:
+    if page is None:
+        return ""
+    verdict = fits(list(printer.media), page, continuous=continuous, takes=printer.takes)
+    return "unknown" if verdict is None else "yes" if verdict else "no"
 
 
 @router.get("", response_model=PrinterListOut)
 async def list_printers(
     status: bool = Query(True, description="Ask the printers for their state"),
+    page_width_pt: float | None = Query(None, gt=0, le=100000),
+    page_height_pt: float | None = Query(None, gt=0, le=100000),
+    continuous: bool = Query(False, description="The label is on a continuous roll (tape)"),
     app: AppState = Depends(state),
 ) -> PrinterListOut:
+    """The printers, and with a page size, whether a label of that size fits
+    each of them."""
+    page = (page_width_pt, page_height_pt) if page_width_pt and page_height_pt else None
     if not app.printers.available():
         return PrinterListOut(
             available=False,
@@ -127,18 +151,39 @@ async def list_printers(
         )
 
     printers = app.registry.list()
+
+    def learn(printer: Printer, probe) -> Printer:
+        """Keep the sizes the printer reported; they rarely change."""
+        if probe is None or not probe.reachable or not probe.media or tuple(probe.media) == printer.media:
+            return printer
+        app.registry.set_media(printer.name, probe.media)
+        return app.registry.get(printer.name) or printer
+
+    def quick() -> list[PrinterOut]:
+        result = []
+        for printer in printers:
+            # A printer whose sizes we never heard is asked once, when it matters.
+            if page is not None and printer.takes == "auto" and not printer.media:
+                try:
+                    printer = learn(printer, app.printers.probe(printer.uri, timeout=4))
+                except PrintingError as exc:
+                    log.warning("could not fetch the sizes of %s: %s", printer.name, exc)
+            result.append(_base(printer).model_copy(update={"fit": _fit(printer, page, continuous)}))
+        return result
+
     if not status:
-        return PrinterListOut(available=True, printers=[_base(printer) for printer in printers])
+        return PrinterListOut(available=True, printers=await to_thread.run_sync(quick))
 
     def probe_all() -> list[PrinterOut]:
         result = []
         for printer in printers:
-            out = _base(printer)
             try:
                 probe = app.printers.probe(printer.uri, timeout=4)
             except PrintingError as exc:
                 log.warning("could not fetch the state of %s: %s", printer.name, exc)
                 probe = None
+            printer = learn(printer, probe)
+            out = _base(printer).model_copy(update={"fit": _fit(printer, page, continuous)})
             if probe is not None and probe.reachable:
                 out = out.model_copy(
                     update={
@@ -202,7 +247,7 @@ async def add_printer(request: AddPrinterRequest, app: AppState = Depends(state)
 
     try:
         printer = app.registry.add(
-            request.name, request.uri, info=request.info, location=request.location
+            request.name, request.uri, info=request.info, location=request.location, media=result.media
         )
     except PrintingError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -228,13 +273,24 @@ async def remove_printer(name: str, app: AppState = Depends(state)) -> Response:
     return Response(status_code=204)
 
 
+@router.put("/{name}/takes", response_model=PrinterOut)
+def set_takes(name: str, request: TakesRequest, app: AppState = Depends(state)) -> PrinterOut:
+    """Say by hand what a printer takes, when the sizes it reports are no help."""
+    try:
+        return _base(app.registry.set_takes(name, request.takes))
+    except PrintingError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/{name}/default", response_model=PrinterListOut)
 async def set_default(name: str, app: AppState = Depends(state)) -> PrinterListOut:
     try:
         app.registry.set_default(name)
     except PrintingError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return await list_printers(status=False, app=app)
+    return await list_printers(
+        status=False, page_width_pt=None, page_height_pt=None, continuous=False, app=app
+    )
 
 
 def _finished_out(record) -> JobOut:

@@ -7,12 +7,14 @@ printer itself stays the source of truth for state and jobs.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .ipp_client import PrintingError, validate_name, validate_uri
+from .media import TAKES
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS printers (
@@ -21,9 +23,26 @@ CREATE TABLE IF NOT EXISTS printers (
     info       TEXT NOT NULL DEFAULT '',
     location   TEXT NOT NULL DEFAULT '',
     is_default INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    -- The sizes the printer reported last (JSON), and what it takes.
+    media      TEXT NOT NULL DEFAULT '[]',
+    takes      TEXT NOT NULL DEFAULT 'auto'
 );
 """
+
+# Columns added later, for a database made before them.
+_ADDED = {
+    "media": "ALTER TABLE printers ADD COLUMN media TEXT NOT NULL DEFAULT '[]'",
+    "takes": "ALTER TABLE printers ADD COLUMN takes TEXT NOT NULL DEFAULT 'auto'",
+}
+
+
+def _media(text: str) -> list[str]:
+    try:
+        value = json.loads(text or "[]")
+    except ValueError:
+        return []
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
 
 
 def _now() -> str:
@@ -38,6 +57,9 @@ class Printer:
     location: str = ""
     is_default: bool = False
     created_at: str = ""
+    # The media sizes the printer reported last; see `media.py`.
+    media: tuple[str, ...] = ()
+    takes: str = "auto"
 
 
 class PrinterRegistry:
@@ -46,6 +68,10 @@ class PrinterRegistry:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            present = {row["name"] for row in conn.execute("PRAGMA table_info(printers)")}
+            for column, statement in _ADDED.items():
+                if column not in present:
+                    conn.execute(statement)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._path, isolation_level=None)
@@ -62,6 +88,8 @@ class PrinterRegistry:
             location=row["location"],
             is_default=bool(row["is_default"]),
             created_at=row["created_at"],
+            media=tuple(_media(row["media"])),
+            takes=row["takes"] if row["takes"] in TAKES else "auto",
         )
 
     def list(self) -> list[Printer]:
@@ -82,7 +110,22 @@ class PrinterRegistry:
             raise PrintingError(f"unknown printer: {name!r}")
         return printer
 
-    def add(self, name: str, uri: str, *, info: str = "", location: str = "") -> Printer:
+    def set_media(self, name: str, media: list[str]) -> None:
+        """Remember the sizes the printer reported, for telling which labels fit."""
+        with self._connect() as conn:
+            conn.execute("UPDATE printers SET media = ? WHERE name = ?", (json.dumps(list(media)), name))
+
+    def set_takes(self, name: str, takes: str) -> Printer:
+        if takes not in TAKES:
+            raise PrintingError(f"unknown choice: {takes!r}")
+        self.require(name)
+        with self._connect() as conn:
+            conn.execute("UPDATE printers SET takes = ? WHERE name = ?", (takes, name))
+        return self.require(name)
+
+    def add(
+        self, name: str, uri: str, *, info: str = "", location: str = "", media: list[str] | None = None
+    ) -> Printer:
         name = validate_name(name)
         uri = validate_uri(uri)
         if self.get(name) is not None:
@@ -93,9 +136,9 @@ class PrinterRegistry:
             # nothing would be preselected when printing.
             first = conn.execute("SELECT COUNT(*) AS total FROM printers").fetchone()["total"] == 0
             conn.execute(
-                "INSERT INTO printers (name, uri, info, location, is_default, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (name, uri, info, location, 1 if first else 0, _now()),
+                "INSERT INTO printers (name, uri, info, location, is_default, created_at, media) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (name, uri, info, location, 1 if first else 0, _now(), json.dumps(list(media or []))),
             )
         return self.require(name)
 

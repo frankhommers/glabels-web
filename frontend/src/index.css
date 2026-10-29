@@ -674,7 +674,9 @@ legend { padding: 0 4px; color: var(--text-muted); }
 .file-toolbar { border: 1px solid var(--border-light); border-radius: 3px; background: var(--window-alt); }
 
 /* ------------------------------------------------------------------ printers */
-.printers-dialog { width: min(820px, 94vw); }
+.printers-dialog { width: min(960px, 96vw); }
+.printers-dialog .merge-source { overflow-wrap: anywhere; font-size: 12px; }
+.printers-dialog td select { max-width: 170px; }
 .printer-form { margin-top: 10px; background: var(--base); }
 .printer-status { color: var(--text-muted); padding-left: 104px; }
 .probe-result { margin: 6px 0; padding: 6px 8px; background: var(--window-alt); border: 1px solid var(--border-light); border-radius: 3px; }
