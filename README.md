@@ -11,7 +11,8 @@ project.
 ## What works
 
 - Product selection from the complete gLabels database (1481 products, 32
-  brands).
+  brands), plus the NIIMBOT label rolls; favourites and recently used
+  products on top.
 - Creating user product definitions, deriving them from an existing product,
   editing and deleting them; stored as XML in the shared folder, and therefore
   interchangeable with the desktop app.

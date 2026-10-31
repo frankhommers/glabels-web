@@ -21,6 +21,10 @@ from .writer import TemplateWriteError, safe_filename, write_template_file
 
 log = logging.getLogger(__name__)
 
+# Product definitions glabels-web adds to upstream's database, one file per
+# source. They load as system templates; removing a file removes its products.
+EXTRA_DIR = Path(__file__).parent / "extra"
+
 _SHAPE_BY_TAG = {
     "Label-rectangle": "rectangle",
     "Label-round": "round",
@@ -74,14 +78,18 @@ class TemplateDatabase:
     # document without losing information from the database.
     _elements: dict[str, etree._Element] = field(default_factory=dict, repr=False)
     _system_dir: Path = field(default_factory=Path, repr=False)
+    _extra_dir: Path | None = field(default=None, repr=False)
     _user_dir: Path | None = field(default=None, repr=False)
     _stamp: tuple[float, int] = field(default=(0.0, 0), repr=False)
 
     # ---------------------------------------------------------------- loading
     @classmethod
-    def load(cls, system_dir: Path, user_dir: Path | None = None) -> "TemplateDatabase":
+    def load(
+        cls, system_dir: Path, user_dir: Path | None = None, extra_dir: Path | None = EXTRA_DIR
+    ) -> "TemplateDatabase":
         db = cls()
         db._system_dir = system_dir
+        db._extra_dir = extra_dir
         db._user_dir = user_dir
         db.reload()
         return db
@@ -100,6 +108,8 @@ class TemplateDatabase:
         self._load_categories(system_dir / "categories.xml")
         self._load_vendors(system_dir / "vendors.xml")
         self._load_template_dir(system_dir, source="system")
+        if self._extra_dir is not None and self._extra_dir.is_dir():
+            self._load_template_dir(self._extra_dir, source="system")
         if self._user_dir is not None and self._user_dir.is_dir():
             self._load_template_dir(self._user_dir, source="user")
         self._stamp = self._user_stamp()

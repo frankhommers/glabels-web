@@ -73,3 +73,36 @@ sometimes that is exactly the point, for example on a continuous roll.
   database uses it (Dymo 30915) and is therefore missing from the list.
 - Assigning categories. A derived definition takes them over from its
   starting point.
+
+## Products glabels-web adds
+
+Next to upstream's database, glabels-web ships product definitions of its own
+in `backend/glabels_web/templates/extra/`, one file per source. They behave as
+bundled definitions; removing a file removes its products.
+
+### NIIMBOT label rolls
+
+`niimbot-templates.xml` holds one product per NIIMBOT label size, for all
+NIIMBOT printers. It is generated from the online label catalogue NIIMBOT's
+own app uses:
+
+```sh
+python3 scripts/update-niimbot-templates.py
+```
+
+The file is committed; the build does not go online. The catalogue is not a
+documented service, so the script may need adjusting when it changes.
+
+Each size becomes a roll product: the width runs across the roll, the height
+along it, in the direction the label leaves the printer. A cable label is
+longer by its tail, which follows the printable part. The guides show the
+areas meant for text (the two faces of a cable flag) and where the tail
+starts. Search by printer model (`D110`) or by the name on the box
+(`T12.5*74+35`).
+
+## Favourites and recently used
+
+In the product list, the star marks a favourite. Favourites and the products
+chosen most recently are listed above all products, as long as no search or
+filter is active. They are kept on the server, so every device shows the same
+list.

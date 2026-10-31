@@ -84,6 +84,20 @@ export const api = {
       method: 'DELETE',
     }),
 
+  templateShortlist: () =>
+    request<{ favorites: Template[]; recent: Template[] }>('/api/templates/shortlist'),
+
+  setFavoriteTemplate: (brand: string, part: string, favorite: boolean) =>
+    request<void>(`/api/templates/${encodeURIComponent(brand)}/${encodeURIComponent(part)}/favorite`, {
+      method: 'PUT',
+      body: JSON.stringify({ favorite }),
+    }),
+
+  markTemplateUsed: (brand: string, part: string) =>
+    request<void>(`/api/templates/${encodeURIComponent(brand)}/${encodeURIComponent(part)}/used`, {
+      method: 'POST',
+    }),
+
   listDocuments: () => request<DocumentListItem[]>('/api/documents'),
 
   createDocument: (body: { name: string; brand: string; part: string; rotate?: boolean }) =>

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..templates.models import Category, PaperSize, Template
 from ..templates.writer import TemplateWriteError
@@ -81,6 +81,56 @@ def delete_template(brand: str, part: str, app: AppState = Depends(state)) -> Re
         raise HTTPException(status_code=404, detail=f"unknown template: {brand} {part}") from exc
     except TemplateWriteError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+class ShortlistOut(BaseModel):
+    favorites: list[Template] = Field(default_factory=list)
+    # Most recently chosen first; favourites are not repeated here.
+    recent: list[Template] = Field(default_factory=list)
+
+
+class FavoriteIn(BaseModel):
+    favorite: bool
+
+
+_RECENT = 8
+
+
+@router.get("/shortlist", response_model=ShortlistOut)
+def shortlist(app: AppState = Depends(state)) -> ShortlistOut:
+    """Favourites and recently chosen products, to show above the search."""
+    _refresh(app)
+    favorites = [t for t in (app.templates.get(*key) for key in app.shortlist.favorites()) if t]
+    chosen = {(t.brand, t.part) for t in favorites}
+    recent = [
+        t
+        for t in (app.templates.get(*key) for key in app.shortlist.recent(_RECENT + len(chosen)))
+        if t and (t.brand, t.part) not in chosen
+    ]
+    return ShortlistOut(favorites=favorites, recent=recent[:_RECENT])
+
+
+def _known(app: AppState, brand: str, part: str) -> None:
+    _refresh(app)
+    if app.templates.get(brand, part) is None:
+        raise HTTPException(status_code=404, detail=f"unknown template: {brand} {part}")
+
+
+@router.put("/{brand}/{part}/favorite", status_code=204)
+def set_favorite(
+    brand: str, part: str, request: FavoriteIn, app: AppState = Depends(state)
+) -> Response:
+    _known(app, brand, part)
+    app.shortlist.set_favorite(brand, part, request.favorite)
+    return Response(status_code=204)
+
+
+@router.post("/{brand}/{part}/used", status_code=204)
+def mark_used(brand: str, part: str, app: AppState = Depends(state)) -> Response:
+    """A product was chosen for a label; it goes to the top of the recent list."""
+    _known(app, brand, part)
+    app.shortlist.mark_used(brand, part)
     return Response(status_code=204)
 
 

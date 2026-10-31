@@ -118,3 +118,25 @@ def test_definition_from_the_folder_is_picked_up(client, tmp_path):
 def test_empty_name_is_refused(client):
     response = client.post("/api/templates", json=_derived(client, brand="  ", part="X"))
     assert response.status_code == 422
+
+
+def test_favourites_and_recent_choices(client):
+    assert client.get("/api/templates/shortlist").json() == {"favorites": [], "recent": []}
+
+    for part in ("5395", "5160", "5395"):
+        assert client.post(f"/api/templates/Avery/{part}/used").status_code == 204
+    recent = [t["part"] for t in client.get("/api/templates/shortlist").json()["recent"]]
+    assert recent == ["5395", "5160"]
+
+    # A favourite is listed once, under favourites.
+    assert client.put("/api/templates/Avery/5160/favorite", json={"favorite": True}).status_code == 204
+    shortlist = client.get("/api/templates/shortlist").json()
+    assert [t["part"] for t in shortlist["favorites"]] == ["5160"]
+    assert [t["part"] for t in shortlist["recent"]] == ["5395"]
+
+    client.put("/api/templates/Avery/5160/favorite", json={"favorite": False})
+    assert client.get("/api/templates/shortlist").json()["favorites"] == []
+
+    assert client.post("/api/templates/Avery/nonexistent/used").status_code == 404
+    # A part with characters that need escaping in an address.
+    assert client.post("/api/templates/NIIMBOT/12.5x74%2B35/used").status_code == 204

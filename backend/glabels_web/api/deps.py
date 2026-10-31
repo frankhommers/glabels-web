@@ -16,6 +16,7 @@ from ..printing import IppClient, PrinterRegistry
 from ..render import Renderer
 from ..settings import Settings, get_settings
 from ..templates import TemplateDatabase
+from ..templates.shortlist import ShortlistStore
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class AppState:
     printers: IppClient
     registry: PrinterRegistry
     preferences: PreferenceStore
+    shortlist: ShortlistStore
 
     @classmethod
     def create(cls, settings: Settings | None = None) -> "AppState":
@@ -62,6 +64,7 @@ class AppState:
             printers=IppClient(),
             registry=PrinterRegistry(settings.database_path),
             preferences=PreferenceStore(settings.database_path),
+            shortlist=ShortlistStore(settings.database_path),
         )
 
 

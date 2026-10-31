@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { DocumentDetail, DocumentObject, TextObject } from '../api/types'
+import type { DocumentDetail, DocumentObject, Markup, TextObject } from '../api/types'
 import { useT } from '../i18n'
 import { labelSize } from './label'
 import { boundsOf, cssColor, isSized } from './objects'
@@ -78,6 +78,29 @@ function transformOf(object: DocumentObject): string {
   const [a0, a1, a2, a3, a4, a5] = object.affine
   const matrix = `matrix(${a0} ${a1} ${a2} ${a3} ${a4} ${a5})`
   return `translate(${object.x_pt} ${object.y_pt}) ${matrix}`
+}
+
+/** A guide from the product definition (margin, fold, area for text);
+ *  shown while designing, never printed. */
+export function Guide({ markup, labelWidth, labelHeight }: { markup: Markup; labelWidth: number; labelHeight: number }) {
+  const v = markup.values
+  switch (markup.type) {
+    case 'margin': {
+      const x = v.x_size ?? v.size ?? 0
+      const y = v.y_size ?? v.size ?? 0
+      return <rect x={x} y={y} width={labelWidth - 2 * x} height={labelHeight - 2 * y} />
+    }
+    case 'line':
+      return <line x1={v.x1 ?? 0} y1={v.y1 ?? 0} x2={v.x2 ?? 0} y2={v.y2 ?? 0} />
+    case 'rect':
+      return <rect x={v.x1 ?? 0} y={v.y1 ?? 0} width={v.w ?? 0} height={v.h ?? 0} rx={v.r ?? 0} />
+    case 'circle':
+      return <circle cx={v.x0 ?? 0} cy={v.y0 ?? 0} r={v.radius ?? 0} />
+    case 'ellipse':
+      return <ellipse cx={(v.x1 ?? 0) + (v.w ?? 0) / 2} cy={(v.y1 ?? 0) + (v.h ?? 0) / 2} rx={(v.w ?? 0) / 2} ry={(v.h ?? 0) / 2} />
+    default:
+      return null
+  }
 }
 
 function LabelOutline({ document: doc }: { document: DocumentDetail }) {
@@ -378,8 +401,6 @@ export function LabelCanvas(props: CanvasProps) {
     setDrag({ kind: 'marquee', startX: point.x, startY: point.y, x: point.x, y: point.y })
   }
 
-  const margin = doc.markups.find((markup) => markup.type === 'margin')
-
   const editingObject = props.editing
     ? (objects.find((object) => object.id === props.editing?.id && object.type === 'text') as TextObject | undefined)
     : undefined
@@ -419,19 +440,12 @@ export function LabelCanvas(props: CanvasProps) {
         </g>
       ) : null}
 
-      {margin && showMarkup ? (
-        <rect
-          transform={frameTransform}
-          pointerEvents="none"
-          x={margin.values.x_size ?? margin.values.size ?? 0}
-          y={margin.values.y_size ?? margin.values.size ?? 0}
-          width={doc.label_width_pt - 2 * (margin.values.x_size ?? margin.values.size ?? 0)}
-          height={doc.label_height_pt - 2 * (margin.values.y_size ?? margin.values.size ?? 0)}
-          fill="none"
-          stroke="#b0bcc8"
-          strokeDasharray="4 3"
-          strokeWidth={0.4}
-        />
+      {showMarkup ? (
+        <g transform={frameTransform} pointerEvents="none" fill="none" stroke="#b0bcc8" strokeDasharray="4 3" strokeWidth={0.4}>
+          {doc.markups.map((markup, index) => (
+            <Guide key={index} markup={markup} labelWidth={doc.label_width_pt} labelHeight={doc.label_height_pt} />
+          ))}
+        </g>
       ) : null}
 
       {objects.map((object, index) => (
