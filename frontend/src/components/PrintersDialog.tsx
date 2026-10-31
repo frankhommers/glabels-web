@@ -1,8 +1,11 @@
 /** Managing printers: adding, choosing the default and removing.
  *
- *  Only driverless IPP destinations. Before adding, the printer is queried
- *  first: IPP transport alone says nothing about the formats and media it
- *  really handles.
+ *  Network printers are driverless IPP destinations, kept on the server.
+ *  Before adding, the printer is queried first: IPP transport alone says
+ *  nothing about the formats and media it really handles.
+ *
+ *  Printers attached to this device (Bluetooth, USB) are kept in this
+ *  browser and found through their driver; see `printing/devices.ts`.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -17,6 +20,17 @@ import {
 } from '../api/printers'
 import { useDialogs } from '../ui/dialogs'
 import { useT } from '../i18n'
+import {
+  addDevicePrinter,
+  deviceDrivers,
+  devicePrinters,
+  driverOf,
+  freeName,
+  removeDevicePrinter,
+  type DeviceDriver,
+  type DevicePrinter,
+} from '../printing/devices'
+import { deviceProblem } from '../printing/deviceList'
 
 const TAKES: PrinterTakes[] = ['auto', 'continuous', 'fixed', 'any']
 
@@ -42,6 +56,14 @@ export function PrintersDialog({
   const [probe, setProbe] = useState<ProbeResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const [devices, setDevices] = useState<DevicePrinter[]>(() => devicePrinters())
+  const [deviceNote, setDeviceNote] = useState<string | null>(null)
+  const drivers = deviceDrivers().filter((driver) => driver.supported())
+  // Adding opens the browser's device picker, which must follow the click
+  // closely: have the driver ready before that.
+  useEffect(() => {
+    for (const driver of deviceDrivers()) if (driver.supported()) driver.prepare?.()
+  }, [])
 
   const reload = useCallback(async () => {
     try {
@@ -95,6 +117,47 @@ export function PrintersDialog({
     } finally {
       setBusy(false)
     }
+  }
+
+  const addDevice = async (driver: DeviceDriver) => {
+    setBusy(true)
+    setProblem(null)
+    setDeviceNote(t('devices.adding'))
+    try {
+      const found = await driver.discover()
+      const added = addDevicePrinter({
+        ...found,
+        name: freeName(found.name, (list?.printers ?? []).map((printer) => printer.name)),
+      })
+      setDevices(devicePrinters())
+      setDeviceNote(t('devices.added', { name: added.name }))
+      if (list) onChanged(list)
+    } catch (error) {
+      setDeviceNote(null)
+      setProblem(deviceProblem(t, error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeDevice = async (printer: DevicePrinter) => {
+    const confirmed = await dialogs.confirm({
+      title: t('printers.deleteTitle'),
+      message: (
+        <>
+          <strong>{printer.name}</strong>
+          <br />
+          {t('printers.deleteQuestion')}
+        </>
+      ),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    })
+    if (!confirmed) return
+    removeDevicePrinter(printer.id)
+    setDevices(devicePrinters())
+    setDeviceNote(null)
+    if (list) onChanged(list)
   }
 
   const remove = async (printer: Printer) => {
@@ -239,6 +302,36 @@ export function PrintersDialog({
             </tbody>
           </table>
 
+          {drivers.length > 0 || devices.length > 0 ? (
+            <>
+              <h4 className="printers-subheading">{t('devices.heading')}</h4>
+              <p className="muted">{t('devices.hint')}</p>
+              <table className="project-table">
+                <tbody>
+                  {devices.length === 0 ? (
+                    <tr>
+                      <td className="placeholder">{t('devices.none')}</td>
+                    </tr>
+                  ) : (
+                    devices.map((printer) => (
+                      <tr key={printer.id}>
+                        <td>{printer.name}</td>
+                        <td>{driverOf(printer)?.title ?? printer.driver}</td>
+                        <td>{printer.model}</td>
+                        <td>
+                          <button type="button" className="linklike" disabled={busy} onClick={() => void removeDevice(printer)}>
+                            {t('common.delete')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              {deviceNote ? <p className="inline-notice">{deviceNote}</p> : null}
+            </>
+          ) : null}
+
           {adding ? (
             <fieldset className="printer-form">
               <legend>{t('printers.addHeading')}</legend>
@@ -344,6 +437,11 @@ export function PrintersDialog({
           <button type="button" disabled={adding || busy || (list ? !list.available : true)} onClick={() => setAdding(true)}>
             {t('printers.addButton')}
           </button>
+          {drivers.map((driver) => (
+            <button key={driver.id} type="button" disabled={busy} onClick={() => void addDevice(driver)}>
+              {t('devices.add', { driver: driver.title })}
+            </button>
+          ))}
           <span className="spacer" />
           <button type="button" className="default" onClick={onClose}>
             {t('common.close')}

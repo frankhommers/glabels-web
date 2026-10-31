@@ -60,6 +60,11 @@ project.
 - The interface in English and Dutch.
 - A phone view for printing on the go: pick a label, change its text,
   choose the number of copies and print. See *On a phone* below.
+- Printers attached to your phone or computer, next to the network printers:
+  NIIMBOT label printers over Bluetooth (Chrome or Edge), as a plugin; see
+  [Printers and printing](docs/printers.md).
+- On a phone, text objects with the same text are one field: a cable flag
+  that carries its text twice is typed once.
 
 ## What does not work yet
 

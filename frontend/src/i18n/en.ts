@@ -703,6 +703,8 @@ export const en = {
   'mobile.noText': 'This label has no text to change.',
   'mobile.readOnly': 'This label can only be printed as it is.',
   'mobile.text': 'Text {number}',
+  'mobile.textOnly': 'Text',
+  'mobile.textPlaces': { one: 'in {count} place', other: 'in {count} places' },
   'mobile.copies': 'Copies',
   'mobile.printer': 'Printer',
   'mobile.noPrinter': 'No printer is set up yet. Add one in the full editor.',
@@ -726,6 +728,20 @@ export const en = {
   'region.it-IT': 'Italian (Italy)',
   'region.da-DK': 'Danish (Denmark)',
   'region.sv-SE': 'Swedish (Sweden)',
+  // ------------------------------------------------------------------ devices
+  'devices.heading': 'Attached to this device',
+  'devices.hint': 'Only this browser can reach these printers; add them on every device you print from.',
+  'devices.add': 'Add: {driver}',
+  'devices.adding': 'Choose the printer in the window of your browser…',
+  'devices.added': '{name} added.',
+  'devices.none': 'No printers attached to this device.',
+  'devices.onThisDevice': 'Attached to this device',
+  'devices.printing': 'Printing… {done} of {total}',
+  'devices.printed': { one: '{count} label printed on {printer}.', other: '{count} labels printed on {printer}.' },
+  'devices.problem.cancelled': 'No printer chosen.',
+  'devices.problem.unreachable': 'The printer cannot be reached. Is it on and nearby, and not connected to another app?',
+  'devices.problem.noPaper': 'The printer reports no labels, or its lid is open.',
+  'devices.problem.failed': 'Printing failed.',
 } satisfies Catalog
 
 export type Messages = typeof en

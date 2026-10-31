@@ -14,8 +14,62 @@
    default straight away.
 
 Only `ipp://` and `ipps://` are accepted, and the address must have a path
-(usually `/ipp/print`). USB printers, raw sockets (`socket://`, ZPL) and
-printers attached only to the browser's computer are outside this version.
+(usually `/ipp/print`). USB printers and raw sockets (`socket://`, ZPL) are
+outside this version; a printer attached to your phone or computer is added
+as below.
+
+## Printers attached to this device
+
+A label printer next to your phone, on Bluetooth, is not reachable from the
+server. Such a printer belongs to the device: it is kept in that browser and
+only shows up there, next to the network printers.
+
+- **Desktop:** in **Manage printers…**, click **Add: Bluetooth (NIIMBOT)**.
+- **Phone:** on a label, below the printer, tap **+ Add: Bluetooth
+  (NIIMBOT)** (shown as long as the phone has no such printer).
+
+The browser shows its own list of devices; choose the printer. Printing then
+goes like any other printer: the server makes the same pages as for a network
+printer, at the printer's resolution, and the browser sends them. Browsers
+let a page reach a Bluetooth device only after a click, and most forget the
+choice when the page is reloaded; then the list of devices shows again at the
+first print.
+
+This needs Web Bluetooth: Chrome or Edge on Android, Windows, macOS, Linux
+or ChromeOS. Safari, Firefox and every browser on an iPhone lack it; there
+the button does not show. The site must be opened over HTTPS (or as
+`localhost`).
+
+A print to such a printer does not appear in the job history: there is no
+server job to follow. Rows of a label's list are marked printed once the
+printer has finished.
+
+### Drivers are plugins
+
+What a printer of this device is, and how to talk to it, is up to a driver
+in `frontend/src/printing/<driver>/`, registered with one line in
+`frontend/src/printing/plugins.ts`. The rest of the application knows them
+only through `frontend/src/printing/devices.ts`: a driver finds a printer,
+says which label sizes fit it, and prints the pages it gets as pictures.
+Removing the line and the folder removes that kind of printer; the printers
+added for it stay in the browser and return with the driver.
+
+### NIIMBOT
+
+`frontend/src/printing/niimbot/` drives NIIMBOT label printers (D11, D110,
+B1, B21 and others) with [niimbluelib](https://github.com/MultiMote/niimbluelib)
+(MIT), the library behind [niim.blue](https://niim.blue). Its code loads only
+when a NIIMBOT printer is added or used.
+
+- A label fits when it is at most 4 mm wider than the print head (the head
+  prints its middle, as on NIIMBOT's 12.5 mm labels for a 12 mm head) and at
+  most 250 mm long. Tape is "may not fit": these printers feed labels with
+  gaps.
+- The page is printed upright: its top comes out first. The NIIMBOT label
+  rolls among the products have their tail at the bottom, so it comes out
+  last.
+- Grey becomes black or white at half; the print density is the model's
+  default.
 
 ## What happens under the hood
 

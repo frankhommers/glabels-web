@@ -274,3 +274,4 @@
   border: none;
 }
 .mobile-rows .mobile-link { align-self: flex-start; padding-left: 0; }
+.mobile-add-device { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }

@@ -1,6 +1,7 @@
 /** Printer management and printing. */
 
 import type { MessageKey, Translate } from '../i18n'
+import type { DevicePrinter } from '../printing/devices'
 import type { PrintSettings } from './types'
 
 export type Printer = {
@@ -24,6 +25,8 @@ export type Printer = {
    *  when no label was asked about; "unknown" when the printer never said
    *  which sizes it takes. */
   fit: '' | 'yes' | 'maybe' | 'no' | 'unknown'
+  /** Set for a printer attached to this device rather than the network. */
+  device?: DevicePrinter
 }
 
 export type PrinterTakes = 'auto' | 'continuous' | 'fixed' | 'any'

@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mmote/niimbluelib": "0.48.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-data-grid": "^7.0.0-beta.63",
@@ -20,6 +21,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@types/web-bluetooth": "0.0.22",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",

@@ -27,6 +27,7 @@ import { useDialogs } from '../ui/dialogs'
 import type { PreviewInfo, PrintSettings, Template } from '../api/types'
 import type { Session } from '../app/session'
 import { PrintersDialog } from '../components/PrintersDialog'
+import { deviceProblem, printOnDevice, withDevicePrinters } from '../printing/deviceList'
 
 /** How many labels fit on one page (all layouts together). */
 function labelsPerPage(template: Template | null): number | null {
@@ -105,7 +106,9 @@ export function PrintPage({ session, template }: { session: Session; template: T
   const [checked, setChecked] = useState(false)
   const judged = useRef(false)
   const showPrinters = useCallback(
-    (result: PrinterList) => {
+    (serverList: PrinterList, page: PageQuestion | null) => {
+      // The printers attached to this device join the network printers.
+      const result = withDevicePrinters(serverList, page)
       setPrinterList(result)
       setPrinterState((current) =>
         chosenHere.current && result.printers.some((item) => item.name === current)
@@ -122,7 +125,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
       .list(false)
       .then((result) => {
         // The judged list may already be there; it knows more.
-        if (!judged.current) showPrinters(result)
+        if (!judged.current) showPrinters(result, null)
       })
       .catch(() => undefined)
   }, [showPrinters])
@@ -134,7 +137,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
       const result = await printerApi.list(true, page)
       judged.current = true
       setChecked(true)
-      showPrinters(result)
+      showPrinters(result, page ?? null)
     } catch {
       // Keep what the first step showed.
     } finally {
@@ -259,6 +262,38 @@ export function PrintPage({ session, template }: { session: Session; template: T
     }
     setPrinting(true)
     setPrintMessage(null)
+    const device = selectedPrinter?.device
+    if (device) {
+      setProblem(null)
+      try {
+        await session.flush()
+        // The pages as the preview has them: the same settings, the same version.
+        const current = info ?? (await api.previewInfo(detail.id, printSettings))
+        await printOnDevice(
+          device,
+          {
+            title: detail.name,
+            pages: current.pages,
+            pageUrl: (number, dpi) =>
+              `${api.previewImageUrl(detail.id, printSettings, number, dpi, detail.revision)}&v=${current.key}`,
+          },
+          (done, total) => setPrintMessage(t('devices.printing', { done, total })),
+        )
+        // A network job marks its rows printed when it completes; here the
+        // print is done once the driver returns.
+        if (pendingOnly && list) {
+          const rows = list.rows.filter((row) => !row.printed).map((row) => row.id)
+          if (rows.length) setList(await lists.markPrinted(detail.id, true, rows))
+        }
+        setPrintMessage(t('devices.printed', { count: current.pages, printer: device.name }))
+      } catch (error) {
+        setPrintMessage(null)
+        setProblem(deviceProblem(t, error))
+      } finally {
+        setPrinting(false)
+      }
+      return
+    }
     try {
       // Always print the version the user is looking at.
       await session.flush()
@@ -309,6 +344,10 @@ export function PrintPage({ session, template }: { session: Session; template: T
             <p className="form-static printer-status printer-checking" role="status">
               <span className="spinner" aria-hidden="true" />
               {t('print.checkingPrinters')}
+            </p>
+          ) : selectedPrinter?.device ? (
+            <p className="form-static printer-status">
+              {t('devices.onThisDevice')} · {selectedPrinter.info} · {selectedPrinter.make_and_model}
             </p>
           ) : selectedPrinter && checked ? (
             <p className="form-static printer-status">
@@ -571,7 +610,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
             setManaging(false)
             void loadPrinters()
           }}
-          onChanged={(list) => setPrinterList(list)}
+          onChanged={(list) => setPrinterList(withDevicePrinters(list, pageQuestion))}
         />
       ) : null}
 

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Root } from './app/Root.tsx'
 import './index.css'
+import './printing/plugins'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

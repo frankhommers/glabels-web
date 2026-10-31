@@ -33,6 +33,8 @@ import { lists, type LabelList } from '../api/lists'
 import { ListPanel } from './ListPanel'
 import { useUprightSrc } from './upright'
 import { MOBILE_BASE, openFullEditor } from './view'
+import { addDevicePrinter, deviceDrivers, freeName, type DeviceDriver } from '../printing/devices'
+import { deviceProblem, printOnDevice, withDevicePrinters } from '../printing/deviceList'
 
 function idFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/m\/([0-9a-f-]{36})\/?$/i)
@@ -135,10 +137,24 @@ function textObjects(objects: DocumentObject[]): TextObject[] {
   return objects.filter((object): object is TextObject => object.type === 'text')
 }
 
+/** Text objects with the same text are one field: a cable flag carries its
+ *  text twice, and typing it once should do. Grouped by the text as loaded,
+ *  so typing does not pull a group apart. */
+function sameTextGroups(texts: string[]): number[][] {
+  const groups = new Map<string, number[]>()
+  texts.forEach((text, index) => {
+    const key = text.trim() ? text : `\u0000${index}`
+    groups.set(key, [...(groups.get(key) ?? []), index])
+  })
+  return [...groups.values()]
+}
+
 function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const t = useT()
   const [detail, setDetail] = useState<DocumentDetail | null>(null)
   const [texts, setTexts] = useState<string[]>([])
+  // Which text objects share one field; see `sameTextGroups`.
+  const [groups, setGroups] = useState<number[][]>([])
   const [fontsOf, setFontsOf] = useState<TextObject[]>([])
   const [copies, setCopies] = useState(1)
   const [printerList, setPrinterList] = useState<Printer[] | null>(null)
@@ -152,6 +168,14 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [printState, setPrintState] = useState<PrintState>({ phase: 'idle' })
+  // The network printers as last heard; the ones of this device join them.
+  const [networkPrinters, setNetworkPrinters] = useState<Printer[] | null>(null)
+  const drivers = deviceDrivers().filter((driver) => driver.supported())
+  // Adding opens the browser's device picker, which must follow the click
+  // closely: have the driver ready before that.
+  useEffect(() => {
+    for (const driver of deviceDrivers()) if (driver.supported()) driver.prepare?.()
+  }, [])
   // A label with ${fields} shows its list: rows to add, then print together.
   const [list, setList] = useState<LabelList | null>(null)
   // The preview: values being typed (after a short pause), a chosen row, or
@@ -179,7 +203,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       .getDocument(id)
       .then((loaded) => {
         setDetail(loaded)
-        setTexts(textObjects(loaded.content.objects).map((object) => object.lines.join('\n')))
+        const loadedTexts = textObjects(loaded.content.objects).map((object) => object.lines.join('\n'))
+        setTexts(loadedTexts)
+        setGroups(sameTextGroups(loadedTexts))
         setFontsOf(textObjects(loaded.content.objects))
       })
       .catch((error) => setProblem(String(error instanceof Error ? error.message : error)))
@@ -198,7 +224,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     if (!loaded) return
     let cancelled = false
     let judged = false
-    const show = (printers: Printer[]) => {
+    const show = (network: Printer[], page: PageQuestion | null) => {
+      const printers = withDevicePrinters({ available: true, printers: network }, page).printers
+      setNetworkPrinters(network)
       setPrinterList(printers)
       setPrinter((current) =>
         chosenHere.current && printers.some((item) => item.name === current) ? current : choosePrinter(printers, id),
@@ -207,7 +235,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     printerApi
       .list(false)
       .then((list) => {
-        if (!cancelled && !judged) show(list.printers)
+        if (!cancelled && !judged) show(list.printers, null)
       })
       .catch(() => undefined)
     const load = async () => {
@@ -223,7 +251,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
         if (cancelled) return
         judged = true
         setPageQuestion(page)
-        show(list.printers)
+        show(list.printers, page)
       } catch {
         if (!cancelled) setPrinterList((current) => current ?? [])
       } finally {
@@ -235,6 +263,22 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       cancelled = true
     }
   }, [id, loaded, continuous])
+
+  // A printer added on this phone: in the list right away, and chosen.
+  const addDevice = async (driver: DeviceDriver) => {
+    setProblem(null)
+    try {
+      const found = await driver.discover()
+      const added = addDevicePrinter({ ...found, name: freeName(found.name, (networkPrinters ?? []).map((item) => item.name)) })
+      const printers = withDevicePrinters({ available: true, printers: networkPrinters ?? [] }, pageQuestion).printers
+      setPrinterList(printers)
+      chosenHere.current = true
+      setPrinter(added.name)
+      rememberPrinter(id, added.name)
+    } catch (error) {
+      setProblem(deviceProblem(t, error))
+    }
+  }
 
   // How many pages the whole print has, for paging through it.
   const pendingStamp = list?.rows.filter((row) => !row.printed).map((row) => `${row.id}:${row.copies}`).join(',') ?? ''
@@ -278,7 +322,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
         .then((loaded) => {
           if (dirty.current) return
           setDetail(loaded)
-          setTexts(textObjects(loaded.content.objects).map((object) => object.lines.join('\n')))
+          const loadedTexts = textObjects(loaded.content.objects).map((object) => object.lines.join('\n'))
+          setTexts(loadedTexts)
+          setGroups(sameTextGroups(loadedTexts))
           setFontsOf(textObjects(loaded.content.objects))
         })
         .catch(() => undefined)
@@ -322,8 +368,8 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   // Leaving the screen must not lose the last few characters.
   useEffect(() => () => void flush(), [flush])
 
-  const changeText = (index: number, value: string) => {
-    setTexts((current) => current.map((text, i) => (i === index ? value : text)))
+  const changeText = (indexes: number[], value: string) => {
+    setTexts((current) => current.map((text, i) => (indexes.includes(i) ? value : text)))
     setPrintState({ phase: 'idle' })
     dirty.current = true
     window.clearTimeout(timer.current)
@@ -339,6 +385,28 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     }
     setProblem(null)
     setPrintState({ phase: 'sending' })
+    const device = selectedPrinter?.device
+    if (device) {
+      const settings = listMode
+        ? { ...DEFAULT_PRINT_SETTINGS, copies: 1, sheets: null, first: 1, pending_only: true }
+        : { ...DEFAULT_PRINT_SETTINGS, copies, sheets: null, first: 1 }
+      // The rows this print covers, to mark them printed afterwards.
+      const rows = listMode ? (list?.rows.filter((row) => !row.printed).map((row) => row.id) ?? []) : []
+      try {
+        await flush()
+        const info = await api.previewInfo(detail.id, settings)
+        await printOnDevice(device, {
+          title: detail.name,
+          pages: info.pages,
+          pageUrl: (number, dpi) => `${api.previewImageUrl(detail.id, settings, number, dpi, detail.revision)}&v=${info.key}`,
+        })
+        if (rows.length) setList(await lists.markPrinted(detail.id, true, rows))
+        setPrintState({ phase: 'done', printer: device.name })
+      } catch (error) {
+        setPrintState({ phase: 'failed', reason: deviceProblem(t, error) })
+      }
+      return
+    }
     try {
       await flush()
       const requestId = newRequestId()
@@ -511,18 +579,26 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
             ) : null}
             {!listMode && texts.length === 0 ? <p className="mobile-note">{t('mobile.noText')}</p> : null}
             {locked ? <p className="mobile-note">{t('mobile.readOnly')}</p> : null}
-            {(listMode ? [] : texts).map((text, index) => (
-              <label key={index} className="mobile-field">
-                {texts.length > 1 ? <span>{t('mobile.text', { number: index + 1 })}</span> : null}
-                <textarea
-                  style={fontStyle(fontsOf[index])}
-                  value={text}
-                  rows={Math.max(2, text.split('\n').length)}
-                  disabled={locked}
-                  onChange={(event) => changeText(index, event.target.value)}
-                />
-              </label>
-            ))}
+            {(listMode ? [] : groups).map((group, number) => {
+              const text = texts[group[0]] ?? ''
+              return (
+                <label key={group.join('-')} className="mobile-field">
+                  {groups.length > 1 || group.length > 1 ? (
+                    <span>
+                      {groups.length > 1 ? t('mobile.text', { number: number + 1 }) : t('mobile.textOnly')}
+                      {group.length > 1 ? ` · ${t('mobile.textPlaces', { count: group.length })}` : ''}
+                    </span>
+                  ) : null}
+                  <textarea
+                    style={fontStyle(fontsOf[group[0]])}
+                    value={text}
+                    rows={Math.max(2, text.split('\n').length)}
+                    disabled={locked}
+                    onChange={(event) => changeText(group, event.target.value)}
+                  />
+                </label>
+              )
+            })}
 
             {listMode ? null : (
               <div className="mobile-copies">
@@ -564,6 +640,15 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
                   ))}
                 </select>
               </label>
+            ) : null}
+            {drivers.length > 0 && !printerList?.some((item) => item.device) ? (
+              <div className="mobile-add-device">
+                {drivers.map((driver) => (
+                  <button key={driver.id} type="button" className="mobile-link" onClick={() => void addDevice(driver)}>
+                    + {t('devices.add', { driver: driver.title })}
+                  </button>
+                ))}
+              </div>
             ) : null}
             {checking ? (
               <p className="mobile-note mobile-checking" role="status">

@@ -705,6 +705,7 @@ legend { padding: 0 4px; color: var(--text-muted); }
 .printers-dialog { width: min(960px, 96vw); }
 .printers-dialog .merge-source { overflow-wrap: anywhere; font-size: 12px; }
 .printers-dialog td select { max-width: 170px; }
+.printers-subheading { margin: 16px 0 2px; font-size: 13px; }
 .printer-form { margin-top: 10px; background: var(--base); }
 .printer-status { color: var(--text-muted); padding-left: 104px; }
 .printer-checking { display: flex; align-items: center; gap: 6px; }
