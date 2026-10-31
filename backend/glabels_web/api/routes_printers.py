@@ -9,16 +9,20 @@ from __future__ import annotations
 import asyncio
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from ..printing import Printer, PrintingError, PrintingUnavailable
-from ..printing.ipp_client import JOB_STATE_NAMES, UNKNOWN_STATE
+from ..printing.ipp_client import JOB_STATE_NAMES, UNKNOWN_STATE, ProbeResult
 from ..printing.media import TAKES, judge
 from .deps import AppState, state
 from .routes_lists import rows_printed
+
+# At most this many printers are asked at the same time.
+_PROBE_WORKERS = 8
 
 log = logging.getLogger(__name__)
 
@@ -159,15 +163,30 @@ async def list_printers(
         app.registry.set_media(printer.name, probe.media)
         return app.registry.get(printer.name) or printer
 
+    def probe_many(selection: list[Printer], what: str) -> dict[str, ProbeResult | None]:
+        """Ask these printers at the same time: one that does not answer
+        should not keep the others waiting."""
+
+        def ask(printer: Printer) -> ProbeResult | None:
+            try:
+                return app.printers.probe(printer.uri, timeout=4)
+            except PrintingError as exc:
+                log.warning("could not fetch the %s of %s: %s", what, printer.name, exc)
+                return None
+
+        if not selection:
+            return {}
+        with ThreadPoolExecutor(max_workers=min(len(selection), _PROBE_WORKERS)) as pool:
+            return dict(zip((printer.name for printer in selection), pool.map(ask, selection)))
+
     def quick() -> list[PrinterOut]:
+        # A printer whose sizes we never heard is asked once, when it matters.
+        unknown = [p for p in printers if page is not None and p.takes == "auto" and not p.media]
+        probes = probe_many(unknown, "sizes")
         result = []
         for printer in printers:
-            # A printer whose sizes we never heard is asked once, when it matters.
-            if page is not None and printer.takes == "auto" and not printer.media:
-                try:
-                    printer = learn(printer, app.printers.probe(printer.uri, timeout=4))
-                except PrintingError as exc:
-                    log.warning("could not fetch the sizes of %s: %s", printer.name, exc)
+            if printer.name in probes:
+                printer = learn(printer, probes[printer.name])
             result.append(_base(printer).model_copy(update={"fit": _fit(printer, page, continuous)}))
         return result
 
@@ -175,13 +194,10 @@ async def list_printers(
         return PrinterListOut(available=True, printers=await to_thread.run_sync(quick))
 
     def probe_all() -> list[PrinterOut]:
+        probes = probe_many(printers, "state")
         result = []
         for printer in printers:
-            try:
-                probe = app.printers.probe(printer.uri, timeout=4)
-            except PrintingError as exc:
-                log.warning("could not fetch the state of %s: %s", printer.name, exc)
-                probe = None
+            probe = probes.get(printer.name)
             printer = learn(printer, probe)
             out = _base(printer).model_copy(update={"fit": _fit(printer, page, continuous)})
             if probe is not None and probe.reachable:

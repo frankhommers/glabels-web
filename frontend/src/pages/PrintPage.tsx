@@ -97,20 +97,50 @@ export function PrintPage({ session, template }: { session: Session; template: T
   const pageQuestion: PageQuestion | null =
     pageWidth > 0 && pageHeight > 0 ? { widthPt: pageWidth, heightPt: pageHeight, continuous } : null
 
-  const loadPrinters = useCallback(async () => {
-    const page = pageWidth > 0 && pageHeight > 0 ? { widthPt: pageWidth, heightPt: pageHeight, continuous } : undefined
-    try {
-      const result = await printerApi.list(true, page)
+  // Two steps: the printers right away, as they are known; then, once the
+  // preview tells the page size, their state and which ones the label fits.
+  // That second step asks every printer and may take a while.
+  const [checking, setChecking] = useState(false)
+  // Has the second step answered? Before that, a printer's state is unknown.
+  const [checked, setChecked] = useState(false)
+  const judged = useRef(false)
+  const showPrinters = useCallback(
+    (result: PrinterList) => {
       setPrinterList(result)
       setPrinterState((current) =>
         chosenHere.current && result.printers.some((item) => item.name === current)
           ? current
           : choosePrinter(result.printers, docId),
       )
+    },
+    [docId],
+  )
+
+  useEffect(() => {
+    judged.current = false
+    printerApi
+      .list(false)
+      .then((result) => {
+        // The judged list may already be there; it knows more.
+        if (!judged.current) showPrinters(result)
+      })
+      .catch(() => undefined)
+  }, [showPrinters])
+
+  const loadPrinters = useCallback(async () => {
+    const page = pageWidth > 0 && pageHeight > 0 ? { widthPt: pageWidth, heightPt: pageHeight, continuous } : undefined
+    setChecking(true)
+    try {
+      const result = await printerApi.list(true, page)
+      judged.current = true
+      setChecked(true)
+      showPrinters(result)
     } catch {
-      setPrinterList(null)
+      // Keep what the first step showed.
+    } finally {
+      setChecking(false)
     }
-  }, [docId, pageWidth, pageHeight, continuous])
+  }, [showPrinters, pageWidth, pageHeight, continuous])
 
   // How many jobs are shown; "Show more" raises this.
   const [jobLimit, setJobLimit] = useState(JOB_PAGE)
@@ -162,6 +192,9 @@ export function PrintPage({ session, template }: { session: Session; template: T
   useEffect(() => {
     if (previewDone) void loadPrinters()
   }, [loadPrinters, previewDone])
+  // From the first list until the second step answers, including the wait
+  // for the preview.
+  const judging = checking || (!checked && !previewDone)
 
   useEffect(() => {
     void loadJobs()
@@ -256,6 +289,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
               value={printer}
               disabled={!printerList?.available || printerList.printers.length === 0}
               onChange={(event) => setPrinter(event.target.value)}
+              aria-busy={judging}
             >
               {printerList?.printers.length ? (
                 byFit(printerList.printers).map((item) => {
@@ -267,11 +301,16 @@ export function PrintPage({ session, template }: { session: Session; template: T
                   )
                 })
               ) : (
-                <option value="">{t('print.noPrinter')}</option>
+                <option value="">{printerList ? t('print.noPrinter') : t('print.loadingPrinters')}</option>
               )}
             </select>
           </div>
-          {selectedPrinter ? (
+          {judging ? (
+            <p className="form-static printer-status printer-checking" role="status">
+              <span className="spinner" aria-hidden="true" />
+              {t('print.checkingPrinters')}
+            </p>
+          ) : selectedPrinter && checked ? (
             <p className="form-static printer-status">
               {printerState(t, selectedPrinter)}
               {selectedPrinter.reachable && !selectedPrinter.accepting
@@ -280,7 +319,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
               {selectedPrinter.make_and_model ? ` · ${selectedPrinter.make_and_model}` : ''}
             </p>
           ) : null}
-          {fitWarning ? (
+          {fitWarning && !judging ? (
             <p className={selectedPrinter?.fit === 'no' ? 'inline-warning' : 'form-static muted'}>{fitWarning}</p>
           ) : null}
           <div className="form-row">

@@ -679,6 +679,18 @@ legend { padding: 0 4px; color: var(--text-muted); }
 .printers-dialog td select { max-width: 170px; }
 .printer-form { margin-top: 10px; background: var(--base); }
 .printer-status { color: var(--text-muted); padding-left: 104px; }
+.printer-checking { display: flex; align-items: center; gap: 6px; }
+.spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  animation: spinner-turn 0.8s linear infinite;
+}
+@keyframes spinner-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .probe-result { margin: 6px 0; padding: 6px 8px; background: var(--window-alt); border: 1px solid var(--border-light); border-radius: 3px; }
 .probe-result p { margin: 0 0 4px; }
 .job-list { list-style: none; margin: 0; padding: 0; }

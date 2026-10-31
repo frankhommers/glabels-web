@@ -143,6 +143,10 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [copies, setCopies] = useState(1)
   const [printerList, setPrinterList] = useState<Printer[] | null>(null)
   const [printer, setPrinter] = useState('')
+  // Chosen by hand here: then the check of which printers fit keeps it.
+  const chosenHere = useRef(false)
+  // The label whose printers were last judged; until then a spinner.
+  const [judgedFor, setJudgedFor] = useState('')
   // The label the printers are judged by: the size of the page printed.
   const [pageQuestion, setPageQuestion] = useState<PageQuestion | null>(null)
   const [saving, setSaving] = useState(false)
@@ -187,9 +191,25 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   // The page size does not change with the text, so once per label.
   const loaded = detail !== null
   const continuous = detail?.label_min_length_pt != null
+  const checking = loaded && judgedFor !== id
+  // Two steps: the printers right away, then which ones the label fits,
+  // which may mean asking a printer.
   useEffect(() => {
     if (!loaded) return
     let cancelled = false
+    let judged = false
+    const show = (printers: Printer[]) => {
+      setPrinterList(printers)
+      setPrinter((current) =>
+        chosenHere.current && printers.some((item) => item.name === current) ? current : choosePrinter(printers, id),
+      )
+    }
+    printerApi
+      .list(false)
+      .then((list) => {
+        if (!cancelled && !judged) show(list.printers)
+      })
+      .catch(() => undefined)
     const load = async () => {
       let page: PageQuestion | null = null
       try {
@@ -201,13 +221,13 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       try {
         const list = await printerApi.list(false, page ?? undefined)
         if (cancelled) return
+        judged = true
         setPageQuestion(page)
-        setPrinterList(list.printers)
-        setPrinter((current) =>
-          current && list.printers.some((item) => item.name === current) ? current : choosePrinter(list.printers, id),
-        )
+        show(list.printers)
       } catch {
-        if (!cancelled) setPrinterList([])
+        if (!cancelled) setPrinterList((current) => current ?? [])
+      } finally {
+        if (!cancelled) setJudgedFor(id)
       }
     }
     void load()
@@ -532,6 +552,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
                 <select
                   value={printer}
                   onChange={(event) => {
+                    chosenHere.current = true
                     setPrinter(event.target.value)
                     rememberPrinter(id, event.target.value)
                   }}
@@ -544,7 +565,14 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
                 </select>
               </label>
             ) : null}
-            {fitWarning && (selectedPrinter?.fit === 'no' || selectedPrinter?.fit === 'maybe') ? <p className="mobile-note">{fitWarning}</p> : null}
+            {checking ? (
+              <p className="mobile-note mobile-checking" role="status">
+                <span className="spinner" aria-hidden="true" />
+                {t('print.checkingPrinters')}
+              </p>
+            ) : fitWarning && (selectedPrinter?.fit === 'no' || selectedPrinter?.fit === 'maybe') ? (
+              <p className="mobile-note">{fitWarning}</p>
+            ) : null}
           </>
         ) : null}
       </main>

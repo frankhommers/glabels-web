@@ -486,6 +486,8 @@ export const nl: Messages = {
   'print.destination': 'Bestemming',
   'print.printer': 'Printer:',
   'print.noPrinter': 'geen printer ingesteld',
+  'print.loadingPrinters': 'printers laden…',
+  'print.checkingPrinters': 'Kijken welke printers passen…',
   'print.default': '{name} (standaard)',
   'print.notAccepting': 'neemt geen opdrachten aan',
   'print.managePrinters': 'Printers beheren…',

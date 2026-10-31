@@ -165,9 +165,12 @@ class IppClient:
             command += ["-f", str(input_file)]
         command += [uri, str(request_file)]
 
+        # ipptool's own limit does not cover a printer that never answers the
+        # connection; then we stop it. Sending a document gets more room.
+        grace = 10 if input_file is not None else 1
         try:
             completed = subprocess.run(
-                command, capture_output=True, timeout=seconds + 10, check=False
+                command, capture_output=True, timeout=seconds + grace, check=False
             )
         except FileNotFoundError as exc:
             raise PrintingUnavailable(f"{self._tool} is not available in this installation") from exc

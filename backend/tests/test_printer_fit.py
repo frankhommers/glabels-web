@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -123,3 +125,19 @@ def test_an_older_database_gets_the_new_columns(tmp_path):
     assert (old.media, old.takes) == ((), "auto")
     registry.set_media("Old", LABELS)
     assert registry.require("Old").media == tuple(LABELS)
+
+
+def test_printers_are_asked_at_the_same_time(client):
+    """A printer that is slow to answer does not keep the others waiting."""
+    fake = client.app.state.app_state.printers
+    answer = fake.probe
+    together = threading.Barrier(3, timeout=2)
+
+    def slow(uri: str, *, timeout: int = 8) -> ProbeResult:
+        together.wait()  # only passes when all three are asked at once
+        time.sleep(0.1)
+        return answer(uri, timeout=timeout)
+
+    fake.probe = slow
+    printers = client.get("/api/printers", params={"status": "true"}).json()["printers"]
+    assert {p["name"]: p["reachable"] for p in printers} == {"Tape": True, "Labels": True, "Away": False}

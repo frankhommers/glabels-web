@@ -52,6 +52,7 @@
 }
 
 .mobile-note { margin: 0; color: var(--text-muted); }
+.mobile-checking { display: flex; align-items: center; gap: 8px; }
 .mobile-problem {
   margin: 0;
   padding: 10px 12px;

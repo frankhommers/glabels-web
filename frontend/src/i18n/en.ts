@@ -491,6 +491,8 @@ export const en = {
   'print.destination': 'Destination',
   'print.printer': 'Printer:',
   'print.noPrinter': 'no printer configured',
+  'print.loadingPrinters': 'loading printers…',
+  'print.checkingPrinters': 'Checking which printers fit…',
   'print.default': '{name} (default)',
   'print.notAccepting': 'not accepting jobs',
   'print.managePrinters': 'Manage printers…',
