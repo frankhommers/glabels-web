@@ -27,6 +27,7 @@ import { useDialogs } from '../ui/dialogs'
 import type { PreviewInfo, PrintSettings, Template } from '../api/types'
 import type { Session } from '../app/session'
 import { PrintersDialog } from '../components/PrintersDialog'
+import { useGuidedSrc, type PreviewGuides } from '../editor/guidedPreview'
 import { deviceProblem, printOnDevice, withDevicePrinters } from '../printing/deviceList'
 
 /** How many labels fit on one page (all layouts together). */
@@ -242,6 +243,30 @@ export function PrintPage({ session, template }: { session: Session; template: T
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // The guides of the product on the preview, where a page holds only a few
+  // labels; not when the print is mirrored.
+  const frame = template?.frames[0]
+  const cells = (frame?.layouts ?? []).flatMap((layout) =>
+    Array.from({ length: layout.nx * layout.ny }, (_, index) => ({
+      x: layout.x0_pt + (index % layout.nx) * layout.dx_pt,
+      y: layout.y0_pt + Math.floor(index / layout.nx) * layout.dy_pt,
+    })),
+  )
+  const guides: PreviewGuides | null =
+    frame && info && cells.length <= 4 && !printSettings.reverse
+      ? {
+          markups: frame.markups,
+          labelWidthPt: frame.width_pt ?? (frame.radius_pt ?? 0) * 2,
+          // A tape is as long as the page.
+          labelHeightPt: continuous ? info.page_height_pt : (frame.height_pt ?? (frame.radius_pt ?? 0) * 2),
+          pageWidthPt: info.page_width_pt,
+          pageHeightPt: info.page_height_pt,
+          cells,
+        }
+      : null
+  const previewSrc = detail && info ? `${api.previewImageUrl(detail.id, printSettings, page, 110, detail.revision)}&v=${info.key}` : ''
+  const guidedSrc = useGuidedSrc(previewSrc, guides)
 
   if (!detail) return null
 
@@ -620,7 +645,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
             <img
               className={landscape ? 'preview-sheet landscape' : 'preview-sheet'}
               // The key names this rendering: a changed source never shows an old picture.
-              src={`${api.previewImageUrl(detail.id, printSettings, page, 110, detail.revision)}&v=${info.key}`}
+              src={guidedSrc}
               alt={t('print.page', { number: page, total: info?.pages ?? '–' })}
             />
           ) : (

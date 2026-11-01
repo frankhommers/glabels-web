@@ -16,8 +16,8 @@ Geometry, as gLabels wants it for a roll: "width" runs across the roll and
 NIIMBOT describes a label as you design it, with a rotation for printing; we
 turn that back. A cable label has a tail that wraps around the cable; it
 follows the printable part along the roll, so the label gets longer by the
-tail. The areas meant for text (the two faces of a cable flag) become guide
-rectangles, the start of the tail a guide line.
+tail. The areas meant for text (the two faces of a cable flag) and the tail
+become guide rectangles.
 """
 
 from __future__ import annotations
@@ -162,7 +162,11 @@ def build(items: list[dict], details: bool) -> str:
 
         markups = []
         if tail:
-            markups.append(f'      <Markup-line x1="0mm" y1={quoteattr(mm(along))} x2={quoteattr(mm(across))} y2={quoteattr(mm(along))}/>')
+            # The tail as an area of its own, so it shows where it is.
+            markups.append(
+                f'      <Markup-rect x1="0mm" y1={quoteattr(mm(along))}'
+                f' w={quoteattr(mm(across))} h={quoteattr(mm(tail))} r="0mm"/>'
+            )
             if details:
                 for member in members:
                     if not member.get("barcode"):

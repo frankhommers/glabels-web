@@ -28,11 +28,12 @@ def test_cable_label_shows_its_faces_and_tail(database):
     # The tail follows the printable part along the roll.
     assert frame.width_pt == pytest.approx(parse_length("12.5mm"))
     assert frame.height_pt == pytest.approx(parse_length("109mm"))
-    kinds = [markup.type for markup in frame.markups]
-    assert kinds.count("line") == 1
-    assert kinds.count("rect") == 2
-    line = next(m for m in frame.markups if m.type == "line")
-    assert line.values["y1"] == pytest.approx(parse_length("74mm"))
+    rects = [markup.values for markup in frame.markups if markup.type == "rect"]
+    # Two faces for text, and the tail after the printable part.
+    assert len(rects) == 3
+    tail = rects[0]
+    assert tail["y1"] == pytest.approx(parse_length("74mm"))
+    assert tail["h"] == pytest.approx(parse_length("35mm"))
 
 
 def test_found_by_printer_and_box_name(database):

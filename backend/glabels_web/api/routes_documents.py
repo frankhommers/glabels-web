@@ -47,7 +47,9 @@ class NewDocumentRequest(BaseModel):
     name: str = Field(default="Untitled", max_length=200)
     brand: str
     part: str
-    rotate: bool = False
+    # Designed a quarter turn from the product. Left out: as the desktop app
+    # decides it, turned when the label is taller than wide.
+    rotate: bool | None = None
 
 
 class SaveDocumentRequest(BaseModel):
@@ -248,7 +250,11 @@ def create_document(request: NewDocumentRequest, app: AppState = Depends(state))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     template = app.templates.get(request.brand, request.part)
-    doc = Document.new_from_template(element, rotate=request.rotate)
+    rotate = request.rotate
+    if rotate is None:
+        width, height = template.frame.bounding_size_pt if template else (0.0, 0.0)
+        rotate = height > width
+    doc = Document.new_from_template(element, rotate=rotate)
     info = app.store.create(
         name=request.name.strip() or "Untitled",
         xml_bytes=doc.to_bytes(),

@@ -297,3 +297,16 @@ def test_only_png_and_svg_are_embedded(client, filename, payload):
     doc = client.post("/api/documents", json={"name": "p", "brand": "Avery", "part": "5095"}).json()
     response = client.post(f"/api/documents/{doc['id']}/images", files={"file": (filename, payload, "application/octet-stream")})
     assert response.status_code == 415
+
+
+def test_new_label_is_turned_like_the_desktop_app_does(client):
+    """Taller than wide starts turned, so a roll label is designed along its
+    length; wider than wide stays upright; asking for it explicitly wins."""
+    tall = client.post("/api/documents", json={"name": "t", "brand": "Dymo", "part": "30252"}).json()
+    wide = client.post("/api/documents", json={"name": "w", "brand": "Avery", "part": "5095"}).json()
+    asked = client.post(
+        "/api/documents", json={"name": "a", "brand": "Dymo", "part": "30252", "rotate": False}
+    ).json()
+    assert tall["content"]["rotate"] is True
+    assert wide["content"]["rotate"] is False
+    assert asked["content"]["rotate"] is False

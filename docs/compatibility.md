@@ -86,6 +86,14 @@ Consequences:
 - The bundled database has one unreadable length (`round="in"` in
   `online-templates.xml`). Like the desktop app, we fall back to the default
   there instead of skipping the product.
+- **A new label starts turned when it is taller than wide**, as in the desktop
+  app: a roll label is designed along its length.
+- **A turned label shows its guides where they print.** The upstream editor
+  turns the label's outline and guides the same way as its renderer turns
+  the design, so a guide at one end of the label (a cable label's tail, say)
+  shows at the other end of the design than where it prints. Our editor
+  turns them the inverse way, matching the print. The file is the same; on a
+  symmetric label nothing differs.
 
 ## Merging
 

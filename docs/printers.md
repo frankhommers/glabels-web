@@ -67,7 +67,7 @@ when a NIIMBOT printer is added or used.
   gaps.
 - The page is printed upright: its top comes out first. The NIIMBOT label
   rolls among the products have their tail at the bottom, so it comes out
-  last.
+  last. Designed lying down, the tail is on the left.
 - Grey becomes black or white at half; the print density is the model's
   default.
 

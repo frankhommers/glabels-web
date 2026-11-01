@@ -247,10 +247,13 @@ export function LabelCanvas(props: CanvasProps) {
 
   const { w: width, h: height } = labelSize(doc)
   // The label itself (shape and markup) lies in the direction of the product
-  // definition; when rotated we draw it a quarter turn, like upstream.
-  const frameTransform = doc.content.rotate
-    ? `rotate(-90) translate(${-doc.label_width_pt} 0)`
-    : undefined
+  // definition; when rotated we draw it a quarter turn. The renderer puts the
+  // design on the label turned a quarter clockwise back (PageRenderer upstream:
+  // rotate(-90), translate(-w)), so the label is drawn here the inverse way.
+  // Upstream's editor turns it the same way as the renderer instead, which
+  // shows a guide at one end of the label at the other end of the design
+  // than where it prints; for a symmetric label that makes no difference.
+  const frameTransform = doc.content.rotate ? `translate(${width} 0) rotate(90)` : undefined
 
   const selected = useMemo(
     () => objects.filter((object) => object.id && selection.includes(object.id)),

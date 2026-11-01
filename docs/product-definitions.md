@@ -96,9 +96,12 @@ documented service, so the script may need adjusting when it changes.
 Each size becomes a roll product: the width runs across the roll, the height
 along it, in the direction the label leaves the printer. A cable label is
 longer by its tail, which follows the printable part. The guides show the
-areas meant for text (the two faces of a cable flag) and where the tail
-starts. Search by printer model (`D110`) or by the name on the box
+areas meant for text (the two faces of a cable flag) and the tail. Search by printer model (`D110`) or by the name on the box
 (`T12.5*74+35`).
+
+A new label on such a roll starts lying down, so you design it along its
+length, as the desktop app does for every label taller than wide. The
+previews on the print page and on a phone show the guides too.
 
 ## Favourites and recently used
 

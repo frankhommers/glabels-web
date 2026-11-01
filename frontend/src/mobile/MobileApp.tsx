@@ -32,6 +32,7 @@ import './mobile.css'
 import { lists, type LabelList } from '../api/lists'
 import { ListPanel } from './ListPanel'
 import { useUprightSrc } from './upright'
+import { useGuidedSrc } from '../editor/guidedPreview'
 import { MOBILE_BASE, openFullEditor } from './view'
 import { addDevicePrinter, deviceDrivers, freeName, type DeviceDriver } from '../printing/devices'
 import { deviceProblem, printOnDevice, withDevicePrinters } from '../printing/deviceList'
@@ -477,7 +478,23 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   // A single label is turned back to how it was designed; a whole sheet is
   // shown as the paper comes out of the printer.
   const showingSheet = listMode && wholeSheet && (list?.pending_rows ?? 0) > 0
-  const preview = useUprightSrc(previewUrl, !showingSheet && (detail?.content.rotate ?? false))
+  // A tape is as long as chosen for this label.
+  const labelLength = (continuous ? detail?.content.length_pt : null) ?? detail?.label_height_pt ?? 0
+  // One label shows the guides of its product, as the editor does.
+  const guided = useGuidedSrc(
+    previewUrl,
+    detail && !showingSheet
+      ? {
+          markups: detail.markups,
+          labelWidthPt: detail.label_width_pt,
+          labelHeightPt: labelLength,
+          pageWidthPt: detail.label_width_pt,
+          pageHeightPt: labelLength,
+          cells: [{ x: 0, y: 0 }],
+        }
+      : null,
+  )
+  const preview = useUprightSrc(guided, !showingSheet && (detail?.content.rotate ?? false))
   const rowIndex = shownRow ? waiting.indexOf(shownRow) : -1
   const step = (delta: number) => {
     if (waiting.length === 0) return
