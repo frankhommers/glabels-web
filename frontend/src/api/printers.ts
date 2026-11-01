@@ -71,6 +71,19 @@ export type PrintJob = {
   finished: boolean
   /** Still pending or processing: worth asking again. */
   active: boolean
+  /** How a printer of the device that printed was reached ("Bluetooth"); empty for a network printer. */
+  connection: string
+}
+
+/** A print on a printer of this device, told to the server afterwards. */
+export type DevicePrintReport = {
+  request_id: string
+  document_id: string
+  printer: string
+  connection: string
+  completed: boolean
+  message?: string
+  list_rows?: string[]
 }
 
 export type PrintJobList = { items: PrintJob[]; total: number }
@@ -157,6 +170,9 @@ export const printers = {
     fetch(`/api/printers/jobs/${encodeURIComponent(requestId)}`, { method: 'DELETE' }).then(
       (response) => json<void>(response),
     ),
+
+  reportDevicePrint: (report: DevicePrintReport) =>
+    fetch('/api/printers/jobs/device', asJson(report)).then((response) => json<PrintJob>(response)),
 
   print: (documentId: string, printer: string, settings: PrintSettings, requestId: string) =>
     fetch(

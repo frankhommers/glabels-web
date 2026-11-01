@@ -9,12 +9,14 @@ from __future__ import annotations
 import asyncio
 
 import logging
+from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 
 from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
+from ..documents.store import DocumentNotFound
 from ..printing import Printer, PrintingError, PrintingUnavailable
 from ..printing.ipp_client import JOB_STATE_NAMES, UNKNOWN_STATE, ProbeResult
 from ..printing.media import TAKES, judge
@@ -109,6 +111,9 @@ class JobOut(BaseModel):
     finished: bool = False
     # Is the job still pending or processing? Then it is worth asking again.
     active: bool = False
+    # How a printer of the device that printed was reached ("Bluetooth");
+    # empty for a network printer.
+    connection: str = ""
 
 
 class JobListOut(BaseModel):
@@ -321,6 +326,7 @@ def _finished_out(record) -> JobOut:
         state_message=record.final_reasons,
         reachable=True,
         finished=True,
+        connection=record.connection,
     )
 
 
@@ -388,6 +394,64 @@ async def list_jobs(
         return result
 
     return JobListOut(items=await to_thread.run_sync(collect), total=total)
+
+
+class DevicePrintReport(BaseModel):
+    """A print on a printer attached to the user's device, told afterwards."""
+
+    # The browser's own id for the print, so a report sent twice counts once.
+    request_id: str = Field(min_length=1, max_length=64)
+    document_id: str = Field(min_length=1, max_length=64)
+    printer: str = Field(min_length=1, max_length=127)
+    connection: str = Field(default="", max_length=64)
+    completed: bool
+    # Why it failed, in the words of the driver.
+    message: str = Field(default="", max_length=500)
+    # The list rows it printed; marked printed when it completed.
+    list_rows: list[str] = Field(default_factory=list, max_length=10_000)
+
+
+JOB_ABORTED = 8
+
+
+@router.post("/jobs/device", response_model=JobOut, status_code=201)
+def report_device_print(report: DevicePrintReport, app: AppState = Depends(state)) -> JobOut:
+    """Record a print that went from the browser straight to a printer.
+
+    The server never saw it, so it comes in finished, with its outcome. A
+    completed one marks its list rows printed, as a network job does.
+    """
+    existing = app.store.find_print_request(report.request_id)
+    if existing is not None:
+        return _finished_out(existing)
+    try:
+        info = app.store.info(report.document_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail="unknown document") from exc
+    rows = [row for row in report.list_rows if row]
+    app.store.record_print_request(
+        report.request_id,
+        info.id,
+        report.printer,
+        "",
+        0,
+        f"{info.name} (revision {info.revision})",
+        list_rows=rows,
+        connection=report.connection or "device",
+    )
+    record = app.store.find_print_request(report.request_id)
+    if record is None:
+        raise HTTPException(status_code=500, detail="the print could not be recorded")
+    state_code = JOB_COMPLETED if report.completed else JOB_ABORTED
+    _finish(app, record, state_code, report.message)
+    app.store.prune_print_requests()
+    log.info(
+        "device print to %s (%s): %s",
+        report.printer,
+        info.name,
+        "completed" if report.completed else f"failed: {report.message}",
+    )
+    return _finished_out(replace(record, final_state_code=state_code, final_reasons=report.message))
 
 
 @router.post("/jobs/clear", response_model=ClearJobsOut)

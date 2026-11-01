@@ -41,9 +41,14 @@ or ChromeOS. Safari, Firefox and every browser on an iPhone lack it; there
 the button does not show. The site must be opened over HTTPS (or as
 `localhost`).
 
-A print to such a printer does not appear in the job history: there is no
-server job to follow. Rows of a label's list are marked printed once the
-printer has finished.
+The server never sees such a print, so the browser tells it the outcome
+afterwards (`POST /api/printers/jobs/device`). It lands in the job history
+already finished, completed or aborted with the reason, and with how the
+printer was reached next to its name ("D110 (Bluetooth)"). A completed print
+marks its list rows printed, as a network job does; should the report not get
+through, the browser marks them itself. Closing the device picker prints
+nothing and is not recorded. A browser that stops halfway (the screen locked,
+the tab closed) reports nothing.
 
 ### Drivers are plugins
 
@@ -157,7 +162,8 @@ from the printer.
   seconds, and only while the tab is visible. Once everything is done, it
   stops.
 - A job's final state (completed, canceled, aborted) is recorded and not asked
-  from the printer again. A printer that does not answer is tried once per
+  from the printer again. Prints on a printer of the user's device come in
+  with their final state. A printer that does not answer is tried once per
   listing, not once per job.
 - The history keeps the newest 100 jobs and nothing older than 30 days.
   **Clean up** removes finished jobs; jobs that may still be running stay,

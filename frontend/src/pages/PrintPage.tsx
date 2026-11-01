@@ -294,23 +294,28 @@ export function PrintPage({ session, template }: { session: Session; template: T
         await session.flush()
         // The pages as the preview has them: the same settings, the same version.
         const current = info ?? (await api.previewInfo(detail.id, printSettings))
-        await printOnDevice(
-          device,
-          {
-            title: detail.name,
-            pages: current.pages,
-            pageUrl: (number, dpi) =>
-              `${api.previewImageUrl(detail.id, printSettings, number, dpi, detail.revision)}&v=${current.key}`,
-          },
-          (done, total) => setPrintMessage(t('devices.printing', { done, total })),
-        )
-        // A network job marks its rows printed when it completes; here the
-        // print is done once the driver returns.
-        if (pendingOnly && list) {
-          const rows = list.rows.filter((row) => !row.printed).map((row) => row.id)
-          if (rows.length) setList(await lists.markPrinted(detail.id, true, rows))
+        // The rows this print covers; the server marks them once it completed.
+        const rows = pendingOnly && list ? list.rows.filter((row) => !row.printed).map((row) => row.id) : []
+        try {
+          const { recorded } = await printOnDevice(
+            device,
+            {
+              documentId: detail.id,
+              title: detail.name,
+              pages: current.pages,
+              pageUrl: (number, dpi) =>
+                `${api.previewImageUrl(detail.id, printSettings, number, dpi, detail.revision)}&v=${current.key}`,
+              listRows: rows,
+            },
+            (done, total) => setPrintMessage(t('devices.printing', { done, total })),
+          )
+          // The report did not get through: mark the rows here, so they are
+          // not printed again.
+          if (rows.length) setList(recorded ? await lists.get(detail.id) : await lists.markPrinted(detail.id, true, rows))
+          setPrintMessage(t('devices.printed', { count: current.pages, printer: device.name }))
+        } finally {
+          await loadJobs()
         }
-        setPrintMessage(t('devices.printed', { count: current.pages, printer: device.name }))
       } catch (error) {
         setPrintMessage(null)
         setProblem(deviceProblem(t, error))
@@ -598,7 +603,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
                 <li key={job.request_id}>
                   <span className="job-title">{job.title || t('print.job', { number: job.job_id })}</span>
                   <span className="job-meta">
-                    {job.printer} · {jobStatus(t, job)}
+                    {job.connection ? `${job.printer} (${job.connection})` : job.printer} · {jobStatus(t, job)}
                     {/* "job-completed-successfully" adds nothing to "completed". */}
                     {job.state_message && job.state_code !== 9 ? ` · ${job.state_message}` : ''}
                   </span>

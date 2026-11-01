@@ -56,7 +56,10 @@ CREATE TABLE IF NOT EXISTS print_requests (
     final_reasons    TEXT NOT NULL DEFAULT '',
     -- The rows of the label's list this job prints, as a JSON array of row
     -- ids; they are marked printed once the job has completed.
-    list_rows        TEXT NOT NULL DEFAULT ''
+    list_rows        TEXT NOT NULL DEFAULT '',
+    -- How a printer attached to the device that printed was reached
+    -- ("Bluetooth"); empty for a network printer.
+    connection       TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -83,6 +86,7 @@ class PrintRecord:
     final_state_code: int = 0
     final_reasons: str = ""
     list_rows: tuple[str, ...] = ()
+    connection: str = ""
 
     @property
     def finished(self) -> bool:
@@ -101,6 +105,7 @@ def _print_record(row: sqlite3.Row) -> PrintRecord:
         final_state_code=row["final_state_code"],
         final_reasons=row["final_reasons"],
         list_rows=tuple(json.loads(row["list_rows"] or "[]")),
+        connection=row["connection"],
     )
 
 
@@ -130,7 +135,7 @@ class DocumentStore:
                         f"ALTER TABLE documents ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
                     )
             job_columns = {row["name"] for row in conn.execute("PRAGMA table_info(print_requests)")}
-            for column in ("printer_uri", "title", "final_reasons", "list_rows"):
+            for column in ("printer_uri", "title", "final_reasons", "list_rows", "connection"):
                 if column not in job_columns:
                     conn.execute(
                         f"ALTER TABLE print_requests ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
@@ -332,15 +337,16 @@ class DocumentStore:
         job_id: int,
         title: str,
         list_rows: list[str] | None = None,
+        connection: str = "",
     ) -> None:
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO print_requests "
-                "(request_id, document_id, printer, printer_uri, title, job_id, created_at, list_rows) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(request_id, document_id, printer, printer_uri, title, job_id, created_at, list_rows, connection) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     request_id, doc_id, printer, printer_uri, title, job_id, _now(),
-                    json.dumps(list_rows) if list_rows else "",
+                    json.dumps(list_rows) if list_rows else "", connection,
                 ),
             )
 

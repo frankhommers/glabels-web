@@ -370,17 +370,21 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       const settings = listMode
         ? { ...DEFAULT_PRINT_SETTINGS, copies: 1, sheets: null, first: 1, pending_only: true }
         : { ...DEFAULT_PRINT_SETTINGS, copies, sheets: null, first: 1 }
-      // The rows this print covers, to mark them printed afterwards.
+      // The rows this print covers, marked printed once it completed.
       const rows = listMode ? (list?.rows.filter((row) => !row.printed).map((row) => row.id) ?? []) : []
       try {
         await flush()
         const info = await api.previewInfo(detail.id, settings)
-        await printOnDevice(device, {
+        const { recorded } = await printOnDevice(device, {
+          documentId: detail.id,
           title: detail.name,
           pages: info.pages,
           pageUrl: (number, dpi) => `${api.previewImageUrl(detail.id, settings, number, dpi, detail.revision)}&v=${info.key}`,
+          listRows: rows,
         })
-        if (rows.length) setList(await lists.markPrinted(detail.id, true, rows))
+        // The server marks the rows; if the report did not get through, mark
+        // them here, so they are not printed again.
+        if (rows.length) setList(recorded ? await lists.get(detail.id) : await lists.markPrinted(detail.id, true, rows))
         setPrintState({ phase: 'done', printer: device.name })
       } catch (error) {
         setPrintState({ phase: 'failed', reason: deviceProblem(t, error) })

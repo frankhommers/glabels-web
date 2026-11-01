@@ -1,7 +1,7 @@
 /** Printers attached to this device next to the network printers: one list
  *  to choose from, and printing to whichever is chosen. */
 
-import type { PageQuestion, Printer, PrinterList } from '../api/printers'
+import { newRequestId, printers as printerApi, type PageQuestion, type Printer, type PrinterList } from '../api/printers'
 import type { MessageKey, Translate } from '../i18n'
 import {
   DeviceError,
@@ -68,20 +68,65 @@ export function withDevicePrinters(list: PrinterList, page: PageQuestion | null)
 }
 
 /** Print on a printer of this device. The pages are the preview pictures of
- *  exactly what a network printer would get, at the printer's resolution. */
+ *  exactly what a network printer would get, at the printer's resolution.
+ *
+ *  The server never sees such a print, so the outcome is told to it after:
+ *  it lands in the job history, and a completed print marks its list rows
+ *  printed, as a network job does. Says whether that report got through; a
+ *  print that went fine stays fine when it did not. */
 export async function printOnDevice(
   printer: DevicePrinter,
-  job: { title: string; pages: number; pageUrl: (page: number, dpi: number) => string },
+  job: {
+    documentId: string
+    title: string
+    pages: number
+    pageUrl: (page: number, dpi: number) => string
+    listRows?: string[]
+  },
   onProgress?: (done: number, total: number) => void,
-): Promise<void> {
+): Promise<{ recorded: boolean }> {
   const driver = driverOf(printer)
   if (!driver) throw new DeviceError('failed', `no driver for ${printer.driver}`)
-  await driver.print(printer, {
-    title: job.title,
-    pages: job.pages,
-    page: (index) => pageCanvas(job.pageUrl(index + 1, printer.dpi)),
-    onProgress,
-  })
+  const report = async (completed: boolean, message = '') => {
+    try {
+      await printerApi.reportDevicePrint({
+        request_id: newRequestId(),
+        document_id: job.documentId,
+        printer: printer.name,
+        connection: driver.connection,
+        completed,
+        message: message.slice(0, 500),
+        list_rows: job.listRows ?? [],
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+  try {
+    await driver.print(printer, {
+      title: job.title,
+      pages: job.pages,
+      page: (index) => pageCanvas(job.pageUrl(index + 1, printer.dpi)),
+      onProgress,
+    })
+  } catch (error) {
+    // Closing the picker printed nothing: not worth a line in the history.
+    if (!(error instanceof DeviceError && error.problem === 'cancelled')) {
+      await report(false, problemWords(error))
+    }
+    throw error
+  }
+  return { recorded: await report(true) }
+}
+
+/** What went wrong, for the history: a keyword like the ones a network
+ *  printer reports ("no-paper"), with the driver's detail. */
+function problemWords(error: unknown): string {
+  if (error instanceof DeviceError) {
+    return error.message && error.message !== error.problem ? `${error.problem}: ${error.message}` : error.problem
+  }
+  return error instanceof Error ? error.message : String(error)
 }
 
 const PROBLEMS: Record<DeviceProblem, MessageKey> = {

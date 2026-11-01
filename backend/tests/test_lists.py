@@ -171,6 +171,60 @@ def test_a_failed_job_leaves_its_rows_to_print(env):
     assert after["rows"][0]["printed"] == "" and after["pending_rows"] == 1
 
 
+def test_a_print_on_a_device_printer_is_recorded_and_marks_its_rows(env):
+    client, _state, _printer, _folder = env
+    doc = _label(client, "${name}")
+    for name in ("Ada", "Bob"):
+        listed = client.post(f"/api/documents/{doc}/list/rows", json={"values": {"name": name}}).json()
+    ada, bob = (row["id"] for row in listed["rows"])
+
+    report = {
+        "request_id": "d1",
+        "document_id": doc,
+        "printer": "D110",
+        "connection": "Bluetooth",
+        "completed": True,
+        "list_rows": [ada],
+    }
+    job = client.post("/api/printers/jobs/device", json=report)
+    assert job.status_code == 201
+    assert job.json()["finished"] and job.json()["state_code"] == 9
+    # Sent twice (a retry): recorded once.
+    assert client.post("/api/printers/jobs/device", json=report).status_code == 201
+
+    jobs = client.get("/api/printers/jobs").json()
+    assert jobs["total"] == 1
+    item = jobs["items"][0]
+    assert (item["printer"], item["connection"]) == ("D110", "Bluetooth")
+    assert item["title"].startswith("Books (revision ")
+    rows = {row["id"]: row for row in client.get(f"/api/documents/{doc}/list").json()["rows"]}
+    assert rows[ada]["printed"] and not rows[bob]["printed"]
+
+
+def test_a_failed_device_print_is_recorded_with_its_reason(env):
+    client, _state, _printer, _folder = env
+    doc = _label(client, "${name}")
+    listed = client.post(f"/api/documents/{doc}/list/rows", json={"values": {"name": "Ada"}}).json()
+    report = {
+        "request_id": "d2",
+        "document_id": doc,
+        "printer": "D110",
+        "connection": "Bluetooth",
+        "completed": False,
+        "message": "out of paper",
+        "list_rows": [listed["rows"][0]["id"]],
+    }
+    job = client.post("/api/printers/jobs/device", json=report).json()
+    assert job["state_code"] == 8 and job["state_message"] == "out of paper"
+    assert client.get(f"/api/documents/{doc}/list").json()["pending_rows"] == 1
+
+
+def test_a_device_print_of_an_unknown_label_is_refused(env):
+    client, _state, _printer, _folder = env
+    report = {"request_id": "d3", "document_id": "nope", "printer": "D110", "completed": True}
+    assert client.post("/api/printers/jobs/device", json=report).status_code == 404
+
+
 def test_the_merge_preview_hides_the_lists_own_columns(env):
     client, _state, _printer, _folder = env
     doc = _label(client, "${name}")
