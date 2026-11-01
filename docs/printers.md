@@ -3,7 +3,7 @@
 ## How to add a printer
 
 1. Go to **Print** and click **Manage printers…**
-2. Click **Add printer…** and enter the printer's IPP address, for example
+2. Click **Add printer…**, keep **Network** as the connection, and enter the printer's IPP address, for example
    `ipp://192.168.1.50/ipp/print`. That address is usually in the printer's
    network menu or on its status page. For a printer shared by CUPS it looks
    like `ipp://host:631/printers/Queue_Name`.
@@ -24,11 +24,12 @@ A label printer next to your phone, on Bluetooth, is not reachable from the
 server. Such a printer belongs to the device: it is kept in that browser and
 only shows up there, next to the network printers.
 
-- **Desktop:** in **Manage printers…**, click **Add: Bluetooth (NIIMBOT)**.
-- **Phone:** on a label, below the printer, tap **+ Add: Bluetooth
-  (NIIMBOT)** (shown as long as the phone has no such printer).
-
-The browser shows its own list of devices; choose the printer. Printing then
+It is added in the same list as the network printers: **Manage printers…**
+(on a phone, the gear next to the printer), **Add printer…**, then choose
+**Bluetooth** as the connection and click **Search**. The browser shows its
+own list of devices; choose the printer, give it a name and add it. In the
+list its connection reads "Bluetooth, this device only". It can be the
+default on this device, and what it takes can be set like for any printer. Printing then
 goes like any other printer: the server makes the same pages as for a network
 printer, at the printer's resolution, and the browser sends them. Browsers
 let a page reach a Bluetooth device only after a click, and most forget the

@@ -710,6 +710,8 @@ legend { padding: 0 4px; color: var(--text-muted); }
 .printer-status { color: var(--text-muted); padding-left: 104px; }
 .printer-checking { display: flex; align-items: center; gap: 6px; }
 .spinner {
+  display: inline-block;
+  box-sizing: border-box;
   flex: none;
   width: 14px;
   height: 14px;
@@ -863,3 +865,16 @@ button.destructive { border-color: #a33; box-shadow: inset 0 0 0 1px #e0b4b4; }
 .list-status-cell .tool { min-width: 26px; height: 22px; }
 .list-grid .tool { height: 22px; }
 .list-copies-editor { inline-size: 100%; block-size: 100%; box-sizing: border-box; border: 2px solid var(--highlight); padding: 0 6px; font: inherit; }
+
+/* The printers on a phone: every printer a block of its own. */
+.choice-row { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+@media (max-width: 640px) {
+  .printers-dialog { width: 100vw; max-height: 100dvh; border-radius: 0; }
+  .printers-table thead { display: none; }
+  .printers-table tr { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 8px 4px; border-bottom: 1px solid var(--border-light); }
+  .printers-table td { display: block; border: none; padding: 0; }
+  .printers-table td:nth-child(2),
+  .printers-table td:nth-child(3) { grid-column: 1 / -1; }
+  .printer-form .form-row { flex-wrap: wrap; }
+  .printer-form .form-row > label:first-child { width: 100%; text-align: left; }
+}

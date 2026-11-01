@@ -372,7 +372,7 @@ export function PrintPage({ session, template }: { session: Session; template: T
             </p>
           ) : selectedPrinter?.device ? (
             <p className="form-static printer-status">
-              {t('devices.onThisDevice')} · {selectedPrinter.info} · {selectedPrinter.make_and_model}
+              {t('devices.onThisDevice')} · {selectedPrinter.info}
             </p>
           ) : selectedPrinter && checked ? (
             <p className="form-static printer-status">

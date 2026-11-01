@@ -592,6 +592,14 @@ export const nl: Messages = {
   'printers.testFirst': 'Test eerst de verbinding; pas daarna kan de printer worden toegevoegd.',
   'printers.noPdf':
     'Deze printer kan niet worden toegevoegd: de applicatie stuurt PDF rechtstreeks naar de printer en zet niets om.',
+  'printers.connection': 'Verbinding',
+  'printers.network': 'Netwerk',
+  'printers.thisDevice': 'alleen dit apparaat',
+  'printers.state.onDemand': 'Verbindt bij printen',
+  'printers.search': 'Zoeken',
+  'printers.searchHint': 'Je browser toont de printers in de buurt; kies de jouwe.',
+  'printers.searchFirst': 'Zoek eerst de printer.',
+  'printers.thisDeviceHint': 'Alleen deze browser kan deze printer bereiken; voeg hem toe op elk apparaat waarmee je print.',
   'printers.addButton': 'Printer toevoegen…',
   'printers.deleteTitle': 'Printer verwijderen',
   'printers.deleteQuestion':
@@ -723,12 +731,6 @@ export const nl: Messages = {
   'region.da-DK': 'Deens (Denemarken)',
   'region.sv-SE': 'Zweeds (Zweden)',
   // ------------------------------------------------------------------ devices
-  'devices.heading': 'Aan dit apparaat',
-  'devices.hint': 'Alleen deze browser kan deze printers bereiken; voeg ze toe op elk apparaat waarmee je print.',
-  'devices.add': 'Toevoegen: {driver}',
-  'devices.adding': 'Kies de printer in het venster van je browser…',
-  'devices.added': '{name} toegevoegd.',
-  'devices.none': 'Geen printers aan dit apparaat.',
   'devices.onThisDevice': 'Aan dit apparaat',
   'devices.printing': 'Printen… {done} van {total}',
   'devices.printed': { one: '{count} label geprint op {printer}.', other: '{count} labels geprint op {printer}.' },

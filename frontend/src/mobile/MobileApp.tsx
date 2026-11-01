@@ -34,8 +34,8 @@ import { ListPanel } from './ListPanel'
 import { useUprightSrc } from './upright'
 import { useGuidedSrc } from '../editor/guidedPreview'
 import { MOBILE_BASE, openFullEditor } from './view'
-import { addDevicePrinter, deviceDrivers, freeName, type DeviceDriver } from '../printing/devices'
 import { deviceProblem, printOnDevice, withDevicePrinters } from '../printing/deviceList'
+import { PrintersDialog } from '../components/PrintersDialog'
 
 function idFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/m\/([0-9a-f-]{36})\/?$/i)
@@ -169,14 +169,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [printState, setPrintState] = useState<PrintState>({ phase: 'idle' })
-  // The network printers as last heard; the ones of this device join them.
-  const [networkPrinters, setNetworkPrinters] = useState<Printer[] | null>(null)
-  const drivers = deviceDrivers().filter((driver) => driver.supported())
-  // Adding opens the browser's device picker, which must follow the click
-  // closely: have the driver ready before that.
-  useEffect(() => {
-    for (const driver of deviceDrivers()) if (driver.supported()) driver.prepare?.()
-  }, [])
+  // The printers, as in the full editor; afterwards the list is asked again.
+  const [managing, setManaging] = useState(false)
+  const [printersVersion, setPrintersVersion] = useState(0)
   // A label with ${fields} shows its list: rows to add, then print together.
   const [list, setList] = useState<LabelList | null>(null)
   // The preview: values being typed (after a short pause), a chosen row, or
@@ -227,7 +222,6 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     let judged = false
     const show = (network: Printer[], page: PageQuestion | null) => {
       const printers = withDevicePrinters({ available: true, printers: network }, page).printers
-      setNetworkPrinters(network)
       setPrinterList(printers)
       setPrinter((current) =>
         chosenHere.current && printers.some((item) => item.name === current) ? current : choosePrinter(printers, id),
@@ -263,23 +257,8 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [id, loaded, continuous])
-
-  // A printer added on this phone: in the list right away, and chosen.
-  const addDevice = async (driver: DeviceDriver) => {
-    setProblem(null)
-    try {
-      const found = await driver.discover()
-      const added = addDevicePrinter({ ...found, name: freeName(found.name, (networkPrinters ?? []).map((item) => item.name)) })
-      const printers = withDevicePrinters({ available: true, printers: networkPrinters ?? [] }, pageQuestion).printers
-      setPrinterList(printers)
-      chosenHere.current = true
-      setPrinter(added.name)
-      rememberPrinter(id, added.name)
-    } catch (error) {
-      setProblem(deviceProblem(t, error))
-    }
-  }
+    // printersVersion: again after the printers were managed.
+  }, [id, loaded, continuous, printersVersion])
 
   // How many pages the whole print has, for paging through it.
   const pendingStamp = list?.rows.filter((row) => !row.printed).map((row) => `${row.id}:${row.copies}`).join(',') ?? ''
@@ -630,43 +609,41 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
               </div>
             )}
 
-            {printerList && printerList.length === 0 ? (
-              <p className="mobile-note">{t('mobile.noPrinter')}</p>
-            ) : null}
-            {printerList && printerList.length === 1 ? (
-              <div className="mobile-field">
-                <span>{t('mobile.printer')}</span>
-                <p className="mobile-printer">{printer}</p>
-              </div>
-            ) : null}
-            {printerList && printerList.length > 1 ? (
-              <label className="mobile-field">
-                <span>{t('mobile.printer')}</span>
-                <select
-                  value={printer}
-                  onChange={(event) => {
-                    chosenHere.current = true
-                    setPrinter(event.target.value)
-                    rememberPrinter(id, event.target.value)
-                  }}
+            <div className="mobile-field">
+              <span>{t('mobile.printer')}</span>
+              <div className="mobile-printer-row">
+                {printerList && printerList.length > 1 ? (
+                  <select
+                    aria-label={t('mobile.printer')}
+                    value={printer}
+                    onChange={(event) => {
+                      chosenHere.current = true
+                      setPrinter(event.target.value)
+                      rememberPrinter(id, event.target.value)
+                    }}
+                  >
+                    {byFit(printerList).map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {printerOption(t, item)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="mobile-printer">
+                    {printerList && printerList.length === 1 ? printer : printerList ? t('mobile.noPrinter') : ''}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="mobile-gear"
+                  aria-label={t('print.managePrinters')}
+                  title={t('print.managePrinters')}
+                  onClick={() => setManaging(true)}
                 >
-                  {byFit(printerList).map((item) => (
-                    <option key={item.name} value={item.name}>
-                      {printerOption(t, item)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {drivers.length > 0 && !printerList?.some((item) => item.device) ? (
-              <div className="mobile-add-device">
-                {drivers.map((driver) => (
-                  <button key={driver.id} type="button" className="mobile-link" onClick={() => void addDevice(driver)}>
-                    + {t('devices.add', { driver: driver.title })}
-                  </button>
-                ))}
+                  ⚙
+                </button>
               </div>
-            ) : null}
+            </div>
             {checking ? (
               <p className="mobile-note mobile-checking" role="status">
                 <span className="spinner" aria-hidden="true" />
@@ -678,6 +655,17 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
           </>
         ) : null}
       </main>
+
+      {managing ? (
+        <PrintersDialog
+          page={pageQuestion}
+          onClose={() => {
+            setManaging(false)
+            setPrintersVersion((value) => value + 1)
+          }}
+          onChanged={(network) => setPrinterList(withDevicePrinters(network, pageQuestion).printers)}
+        />
+      ) : null}
 
       {detail ? (
         <footer className="mobile-action">

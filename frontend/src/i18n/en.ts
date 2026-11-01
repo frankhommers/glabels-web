@@ -597,6 +597,14 @@ export const en = {
   'printers.testFirst': 'Test the connection first; only then can the printer be added.',
   'printers.noPdf':
     'This printer cannot be added: the application sends PDF straight to the printer and does not convert anything.',
+  'printers.connection': 'Connection',
+  'printers.network': 'Network',
+  'printers.thisDevice': 'this device only',
+  'printers.state.onDemand': 'Connects when printing',
+  'printers.search': 'Search',
+  'printers.searchHint': 'Your browser shows the printers nearby; choose yours.',
+  'printers.searchFirst': 'Search for the printer first.',
+  'printers.thisDeviceHint': 'Only this browser can reach this printer; add it on every device you print from.',
   'printers.addButton': 'Add printer…',
   'printers.deleteTitle': 'Delete printer',
   'printers.deleteQuestion':
@@ -729,12 +737,6 @@ export const en = {
   'region.da-DK': 'Danish (Denmark)',
   'region.sv-SE': 'Swedish (Sweden)',
   // ------------------------------------------------------------------ devices
-  'devices.heading': 'Attached to this device',
-  'devices.hint': 'Only this browser can reach these printers; add them on every device you print from.',
-  'devices.add': 'Add: {driver}',
-  'devices.adding': 'Choose the printer in the window of your browser…',
-  'devices.added': '{name} added.',
-  'devices.none': 'No printers attached to this device.',
   'devices.onThisDevice': 'Attached to this device',
   'devices.printing': 'Printing… {done} of {total}',
   'devices.printed': { one: '{count} label printed on {printer}.', other: '{count} labels printed on {printer}.' },

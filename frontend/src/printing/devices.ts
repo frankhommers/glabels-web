@@ -9,6 +9,8 @@
  *  printer's resolution and sends them.
  */
 
+import type { PrinterTakes } from '../api/printers'
+
 /** A printer attached to this device, as kept in this browser. */
 export type DevicePrinter = {
   id: string
@@ -21,6 +23,9 @@ export type DevicePrinter = {
   dpi: number
   /** Whatever else the driver needs to find and use it again. */
   details: Record<string, string | number | boolean>
+  /** What it takes, when the driver's judgement should be overruled; as
+   *  for a network printer. */
+  takes?: PrinterTakes
 }
 
 /** A label to judge a printer by, like `PageQuestion` for the server. */
@@ -39,9 +44,11 @@ export type DeviceJob = {
 
 export interface DeviceDriver {
   id: string
-  /** Its name in the interface, such as "Bluetooth (NIIMBOT)": made of
-   *  names, so it needs no translation. */
-  title: string
+  /** How it is reached, as the list of printers says it: "Bluetooth". */
+  connection: string
+  /** Whose printers it drives, shown with the model: "NIIMBOT". Names, so
+   *  neither needs translating. */
+  brand: string
   /** Can this browser use it at all (Bluetooth, USB)? */
   supported(): boolean
   /** Get ready to be used soon, for instance by loading its code: the
@@ -121,8 +128,26 @@ export function addDevicePrinter(printer: Omit<DevicePrinter, 'id'>): DevicePrin
   return added
 }
 
+export function updateDevicePrinter(id: string, change: Partial<Omit<DevicePrinter, 'id'>>) {
+  storeAll(devicePrinters().map((printer) => (printer.id === id ? { ...printer, ...change } : printer)))
+}
+
 export function removeDevicePrinter(id: string) {
   storeAll(devicePrinters().filter((printer) => printer.id !== id))
+  if (deviceDefault() === id) setDeviceDefault(null)
+}
+
+const DEFAULT_KEY = 'glabels-web.device-default'
+
+/** The printer of this device that is the default here, instead of the
+ *  network's default; `null` when the network's default applies. */
+export function deviceDefault(): string | null {
+  return window.localStorage.getItem(DEFAULT_KEY)
+}
+
+export function setDeviceDefault(id: string | null) {
+  if (id) window.localStorage.setItem(DEFAULT_KEY, id)
+  else window.localStorage.removeItem(DEFAULT_KEY)
 }
 
 /** A name not yet in use, among the network printers and these. */

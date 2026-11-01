@@ -3,7 +3,31 @@
 
 import type { PageQuestion, Printer, PrinterList } from '../api/printers'
 import type { MessageKey, Translate } from '../i18n'
-import { DeviceError, devicePrinters, driverOf, pageCanvas, type DevicePrinter, type DeviceProblem } from './devices'
+import {
+  DeviceError,
+  deviceDefault,
+  devicePrinters,
+  driverOf,
+  pageCanvas,
+  type DevicePage,
+  type DevicePrinter,
+  type DeviceProblem,
+  type Fit,
+} from './devices'
+
+/** Does the label fit: what it was set to take, or else the driver's word. */
+function fitOf(printer: DevicePrinter, page: DevicePage): Fit {
+  switch (printer.takes) {
+    case 'any':
+      return 'yes'
+    case 'continuous':
+      return page.continuous ? 'yes' : 'no'
+    case 'fixed':
+      return page.continuous ? 'no' : 'yes'
+    default:
+      return driverOf(printer)?.fit(printer, page) ?? 'unknown'
+  }
+}
 
 /** A printer of this device in the shape of a network printer. */
 function asPrinter(printer: DevicePrinter, page: PageQuestion | null): Printer {
@@ -11,17 +35,17 @@ function asPrinter(printer: DevicePrinter, page: PageQuestion | null): Printer {
   return {
     name: printer.name,
     uri: `${printer.driver}:${printer.model}`,
-    info: driver?.title ?? '',
+    info: driver ? `${driver.brand} ${printer.model}` : printer.model,
     location: '',
-    is_default: false,
+    is_default: deviceDefault() === printer.id,
     state: '',
     state_code: 0,
     state_message: '',
     accepting: true,
     make_and_model: printer.model,
     reachable: true,
-    takes: 'auto',
-    fit: page && driver ? driver.fit(printer, page) : '',
+    takes: printer.takes ?? 'auto',
+    fit: page && driver ? fitOf(printer, page) : '',
     device: printer,
   }
 }
@@ -32,11 +56,14 @@ export function withDevicePrinters(list: PrinterList, page: PageQuestion | null)
   for (const printer of usable) driverOf(printer)?.prepare?.()
   const taken = new Set(list.printers.map((printer) => printer.name))
   const extra = usable.filter((printer) => !taken.has(printer.name)).map((printer) => asPrinter(printer, page))
+  // A default chosen on this device takes over from the network's default.
+  const ownDefault = extra.some((printer) => printer.is_default)
+  const network = ownDefault ? list.printers.map((printer) => ({ ...printer, is_default: false })) : list.printers
   return {
     ...list,
     // Without a print service the network printers are out, these are not.
     available: list.available || extra.length > 0,
-    printers: [...list.printers, ...extra],
+    printers: [...network, ...extra],
   }
 }
 

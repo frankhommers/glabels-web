@@ -31,7 +31,8 @@ export function fit(printer: DevicePrinter, page: DevicePage): Fit {
 
 registerDriver({
   id: 'niimbot',
-  title: 'Bluetooth (NIIMBOT)',
+  connection: 'Bluetooth',
+  brand: 'NIIMBOT',
   supported: () => typeof navigator !== 'undefined' && 'bluetooth' in navigator,
   prepare: () => void load(),
   discover: async () => (await load()).discover(),

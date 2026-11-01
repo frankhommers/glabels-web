@@ -50,7 +50,9 @@ export function Root() {
   return (
     <TranslationProvider locale={preferences.locale || undefined}>
       {mobile ? (
-        <MobileApp />
+        <DialogProvider>
+          <MobileApp />
+        </DialogProvider>
       ) : (
         <DialogProvider>
           <App

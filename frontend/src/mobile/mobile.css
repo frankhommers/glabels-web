@@ -275,3 +275,16 @@
 }
 .mobile-rows .mobile-link { align-self: flex-start; padding-left: 0; }
 .mobile-add-device { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.mobile-printer-row { display: flex; align-items: stretch; gap: 8px; }
+.mobile-printer-row > select,
+.mobile-printer-row > .mobile-printer { flex: 1; min-width: 0; }
+.mobile-gear {
+  flex: none;
+  width: 46px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text);
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
