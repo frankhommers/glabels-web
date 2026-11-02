@@ -62,7 +62,17 @@ RUN set -eux; \
     cp /src/templates/*.xml /src/templates/*.dtd /opt/glabels/share/glabels-qt/templates/; \
     # FileUtil::translationsDir() aborts with qFatal if this folder is missing.
     # We do not build the .qm files themselves; the batch renderer runs in English.
-    mkdir -p /opt/glabels/share/glabels-qt/translations
+    mkdir -p /opt/glabels/share/glabels-qt/translations; \
+    # The same renderer once more, without the product database. It reads
+    # every product definition at each start: three quarters of the time a
+    # render takes (on a NAS about 0.75 of 1 s). A document carries its own
+    # definition in full: we write it without `equiv`, and so does the
+    # desktop app. Paper sizes, categories and vendors stay; they are small.
+    # The full set stays in /opt/glabels for the product list of the API.
+    install -D -m 0755 /opt/glabels/bin/glabels-batch-qt /opt/glabels-render/bin/glabels-batch-qt; \
+    mkdir -p /opt/glabels-render/share/glabels-qt/templates /opt/glabels-render/share/glabels-qt/translations; \
+    cp /src/templates/paper-sizes.xml /src/templates/categories.xml /src/templates/vendors.xml \
+       /src/templates/*.dtd /opt/glabels-render/share/glabels-qt/templates/
 
 # -------------------------------------------------------------- runtime stage
 FROM ${DEBIAN_BASE} AS runtime
@@ -88,6 +98,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/glabels /opt/glabels
+COPY --from=build /opt/glabels-render /opt/glabels-render
 COPY --from=build /build-config.txt /opt/glabels/share/glabels-web/build-config.txt
 COPY --from=build /src-commit.txt  /opt/glabels/share/glabels-web/upstream-commit.txt
 
@@ -101,4 +112,5 @@ ENV QT_QPA_PLATFORM=offscreen \
     XDG_CACHE_HOME=/tmp/.cache
 
 WORKDIR /work
-ENTRYPOINT ["glabels-batch-qt"]
+# Rendering a document: the fast renderer without the product database.
+ENTRYPOINT ["/opt/glabels-render/bin/glabels-batch-qt"]

@@ -51,6 +51,26 @@ function trace(context: CanvasRenderingContext2D, markup: Markup, width: number,
   context.stroke()
 }
 
+/** Draw the guides over a picture of the page that is `pictureWidth`
+ *  pixels wide. */
+export function drawGuides(context: CanvasRenderingContext2D, guides: PreviewGuides, pictureWidth: number) {
+  if (guides.pageWidthPt <= 0) return
+  const scale = pictureWidth / guides.pageWidthPt
+  context.save()
+  // A thin dashed line of about one screen pixel, whatever the resolution.
+  context.lineWidth = 1 / scale
+  context.setLineDash([4 / scale, 3 / scale])
+  context.strokeStyle = 'rgba(42, 96, 153, 0.75)'
+  for (const cell of guides.cells) {
+    context.save()
+    context.scale(scale, scale)
+    context.translate(cell.x, cell.y)
+    for (const markup of guides.markups) trace(context, markup, guides.labelWidthPt, guides.labelHeightPt)
+    context.restore()
+  }
+  context.restore()
+}
+
 /** The picture with the guides on it; the plain picture until that is ready,
  *  or when there are no guides to draw. */
 export function useGuidedSrc(src: string, guides: PreviewGuides | null): string {
@@ -70,18 +90,7 @@ export function useGuidedSrc(src: string, guides: PreviewGuides | null): string 
       const context = canvas.getContext('2d')
       if (!context || wanted.pageWidthPt <= 0) return
       context.drawImage(image, 0, 0)
-      const scale = canvas.width / wanted.pageWidthPt
-      // A thin dashed line of about one screen pixel, whatever the resolution.
-      context.lineWidth = 1 / scale
-      context.setLineDash([4 / scale, 3 / scale])
-      context.strokeStyle = 'rgba(42, 96, 153, 0.75)'
-      for (const cell of wanted.cells) {
-        context.save()
-        context.scale(scale, scale)
-        context.translate(cell.x, cell.y)
-        for (const markup of wanted.markups) trace(context, markup, wanted.labelWidthPt, wanted.labelHeightPt)
-        context.restore()
-      }
+      drawGuides(context, wanted, canvas.width)
       canvas.toBlob((blob) => {
         if (!blob || cancelled) return
         url = URL.createObjectURL(blob)

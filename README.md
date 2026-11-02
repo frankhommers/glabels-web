@@ -164,7 +164,7 @@ The frontend is type checked with `npx tsc -b` (part of `npm run build`). Use
 | `GLW_DATA_DIR` | `/var/lib/glabels-web` | Documents, database and revisions |
 | `GLW_FILES_DIR` | `<GLW_DATA_DIR>/files` | Shared folder: projects, merge sources, `fonts/`, `templates/` |
 | `GLW_WEB_ROOT` | `/opt/glabels-web/web` | Built web interface |
-| `GLW_BATCH_COMMAND` | `/opt/glabels/bin/glabels-batch-qt` | Renderer in the same image |
+| `GLW_BATCH_COMMAND` | `/opt/glabels-render/bin/glabels-batch-qt` | Renderer in the same image (without the product database, see `docker/renderer.Dockerfile`) |
 | `GLW_BATCH_DOCKER_IMAGE` | *(empty)* | Renderer through a separate container (development) |
 | `GLW_RENDER_TIMEOUT` | `60` | Maximum render time in seconds |
 | `GLW_RENDER_CONCURRENCY` | `2` | Concurrent render jobs |

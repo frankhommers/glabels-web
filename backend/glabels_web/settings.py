@@ -60,7 +60,7 @@ class Settings:
 
     # Rendering.
     batch_command: str = field(
-        default_factory=lambda: os.environ.get("GLW_BATCH_COMMAND", "/opt/glabels/bin/glabels-batch-qt")
+        default_factory=lambda: os.environ.get("GLW_BATCH_COMMAND", "/opt/glabels-render/bin/glabels-batch-qt")
     )
     # A separate docker call for development outside the container.
     batch_docker_image: str | None = field(

@@ -701,6 +701,7 @@ export const nl: Messages = {
   'mobile.sheetPage': 'Vel {page} van {pages}',
   'mobile.previewTyping': 'Zoals je typt',
   'mobile.previewPrinted': 'Geprint',
+  'mobile.previewFailed': 'Voorbeeld niet beschikbaar',
   'mobile.oneLabel': 'Eén label',
   'mobile.wholeSheet': 'Heel vel',
   'mobile.labels': 'Labels',

@@ -127,7 +127,10 @@
   object-fit: contain;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  transition: filter 0.15s, opacity 0.15s;
 }
+/* Out of date: the new picture is on its way. */
+.mobile-preview img.updating { filter: blur(2px); opacity: 0.6; }
 .mobile-saving {
   position: absolute;
   right: 8px;

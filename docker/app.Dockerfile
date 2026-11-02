@@ -59,7 +59,7 @@ ENV HOME=/home/glabels \
     GLW_SYSTEM_TEMPLATES_DIR=/opt/glabels/share/glabels-qt/templates \
     GLW_DATA_DIR=/var/lib/glabels-web \
     GLW_FILES_DIR=/var/lib/glabels-web/files \
-    GLW_BATCH_COMMAND=/opt/glabels/bin/glabels-batch-qt \
+    GLW_BATCH_COMMAND=/opt/glabels-render/bin/glabels-batch-qt \
     PATH=/opt/glabels-web/venv/bin:/opt/glabels/bin:$PATH
 
 WORKDIR /opt/glabels-web

@@ -32,7 +32,7 @@ import './mobile.css'
 import { lists, type LabelList } from '../api/lists'
 import { ListPanel } from './ListPanel'
 import { useUprightSrc } from './upright'
-import { useGuidedSrc } from '../editor/guidedPreview'
+import { useSteadyPreview } from './steadyPreview'
 import { MOBILE_BASE, openFullEditor } from './view'
 import { deviceProblem, printOnDevice, withDevicePrinters } from '../printing/deviceList'
 import { PrintersDialog } from '../components/PrintersDialog'
@@ -177,6 +177,10 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   // The preview: values being typed (after a short pause), a chosen row, or
   // the whole sheet with its page.
   const [draft, setDraft] = useState<Record<string, string> | null>(null)
+  // Typed but not saved yet, or typed in the list form but not shown yet:
+  // the preview is out of date from the first key.
+  const [edited, setEdited] = useState(false)
+  const [typing, setTyping] = useState(false)
   const [chosenRow, setChosenRow] = useState<string | null>(null)
   const [wholeSheet, setWholeSheet] = useState(false)
   const [sheetPage, setSheetPage] = useState(1)
@@ -336,6 +340,8 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
       setProblem(String(error instanceof Error ? error.message : error))
     } finally {
       setSaving(false)
+      // Saved, unless more was typed meanwhile: the new picture is on its way.
+      if (!dirty.current) setEdited(false)
     }
   }, [])
 
@@ -351,11 +357,12 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const changeText = (indexes: number[], value: string) => {
     setTexts((current) => current.map((text, i) => (indexes.includes(i) ? value : text)))
     setPrintState({ phase: 'idle' })
+    setEdited(true)
     dirty.current = true
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       pendingSave.current = save()
-    }, 700)
+    }, 400)
   }
 
   const print = async () => {
@@ -463,8 +470,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const showingSheet = listMode && wholeSheet && (list?.pending_rows ?? 0) > 0
   // A tape is as long as chosen for this label.
   const labelLength = (continuous ? detail?.content.length_pt : null) ?? detail?.label_height_pt ?? 0
-  // One label shows the guides of its product, as the editor does.
-  const guided = useGuidedSrc(
+  // One label shows the guides of its product, as the editor does. The
+  // previous picture stays, blurred, until the new one is ready.
+  const preview = useSteadyPreview(
     previewUrl,
     detail && !showingSheet
       ? {
@@ -476,8 +484,9 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
           cells: [{ x: 0, y: 0 }],
         }
       : null,
+    !showingSheet && (detail?.content.rotate ?? false),
   )
-  const preview = useUprightSrc(guided, !showingSheet && (detail?.content.rotate ?? false))
+  const previewStale = preview.updating || edited || (listMode && typing)
   const rowIndex = shownRow ? waiting.indexOf(shownRow) : -1
   const step = (delta: number) => {
     if (waiting.length === 0) return
@@ -505,7 +514,10 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
         {detail ? (
           <>
             <div className="mobile-preview">
-              {preview ? <img src={preview} alt={detail.name} /> : null}
+              {preview.src ? (
+                <img src={preview.src} alt={detail.name} className={previewStale ? 'updating' : undefined} />
+              ) : null}
+              {preview.failed && !previewStale ? <span className="mobile-saving">{t('mobile.previewFailed')}</span> : null}
               {saving ? <span className="mobile-saving">{t('mobile.saving')}</span> : null}
             </div>
             {listMode && list && list.rows.length > 0 ? (
@@ -569,6 +581,7 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
                   }
                 }}
                 onDraft={setDraft}
+                onTyping={setTyping}
                 onChoose={(id) => {
                   setChosenRow(id)
                   setDraft(null)

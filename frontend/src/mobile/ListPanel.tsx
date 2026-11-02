@@ -16,6 +16,7 @@ export function ListPanel({
   chosenRow,
   onChange,
   onDraft,
+  onTyping,
   onChoose,
   onProblem,
 }: {
@@ -26,6 +27,8 @@ export function ListPanel({
   onChange: (list: LabelList) => void
   /** What is being typed, after a short pause, for the preview; null when empty. */
   onDraft: (values: Record<string, string> | null) => void
+  /** Typing has started, and the preview does not show it yet; or it does again. */
+  onTyping?: (typing: boolean) => void
   /** Show this row in the preview. */
   onChoose: (row: string) => void
   onProblem: (message: string) => void
@@ -56,9 +59,15 @@ export function ListPanel({
   useEffect(() => {
     const timer = window.setTimeout(() => {
       onDraft(!unchanged && Object.values(values).some((value) => value.trim()) ? values : null)
-    }, 500)
+      onTyping?.(false)
+    }, 300)
     return () => window.clearTimeout(timer)
-  }, [values, onDraft, unchanged])
+  }, [values, onDraft, onTyping, unchanged])
+
+  const type = (field: string, value: string) => {
+    setValues({ ...values, [field]: value })
+    onTyping?.(true)
+  }
 
   const startEditing = (row: ListRow) => {
     onChoose(row.id)
@@ -143,7 +152,7 @@ export function ListPanel({
                   }}
                   value={values[field] ?? ''}
                   rows={Math.max(2, (values[field] ?? '').split('\n').length)}
-                  onChange={(event) => setValues({ ...values, [field]: event.target.value })}
+                  onChange={(event) => type(field, event.target.value)}
                 />
               ) : (
                 <input
@@ -158,7 +167,7 @@ export function ListPanel({
                     event.preventDefault()
                     fieldRefs.current[index + 1]?.focus()
                   }}
-                  onChange={(event) => setValues({ ...values, [field]: event.target.value })}
+                  onChange={(event) => type(field, event.target.value)}
                 />
               )}
             </label>

@@ -707,6 +707,7 @@ export const en = {
   'mobile.sheetPage': 'Sheet {page} of {pages}',
   'mobile.previewTyping': 'As you type',
   'mobile.previewPrinted': 'Printed',
+  'mobile.previewFailed': 'Preview not available',
   'mobile.oneLabel': 'One label',
   'mobile.wholeSheet': 'Whole sheet',
   'mobile.labels': 'Labels',
