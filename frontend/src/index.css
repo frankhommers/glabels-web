@@ -189,8 +189,8 @@ body { background: var(--window); overflow: hidden; }
   text-decoration: none;
   display: inline-block;
 }
-:where(button:not(:disabled), .button):hover { background: var(--button-hover); }
-:where(button:not(:disabled)):active { background: var(--button-down); }
+:where(button:not(:disabled):hover, .button:hover) { background: var(--button-hover); }
+:where(button:not(:disabled):active) { background: var(--button-down); }
 
 /* Disabled still outweighs a component colour. */
 button:disabled { color: #a6a6a6; }

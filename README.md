@@ -245,7 +245,8 @@ edit. The preview is the same PDF that gets printed.
   rather than `localhost`.
 - **Desktop** at the top of the phone view switches that device to the full
   editor and remembers it; *Open on phone ▸ Use the phone view here* switches
-  back.
+  back. Either way the same label stays open: the full editor keeps the open
+  label in its address (`/?label=<id>`), so a reload lands there too.
 - Added to the home screen, the app opens full screen. On iOS that works over
   plain HTTP; Android only installs it as an app over HTTPS, and otherwise
   adds a normal shortcut.

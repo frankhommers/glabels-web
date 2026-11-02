@@ -27,6 +27,7 @@ import { Icon } from './ui/Icon'
 import { useDialogs } from './ui/dialogs'
 import { MenuBar, type Menu } from './ui/MenuBar'
 import { OpenOnPhoneDialog } from './components/OpenOnPhoneDialog'
+import { editorPath, labelInAddress } from './mobile/view'
 import { formatLength } from './editor/units'
 import { MAX_ZOOM, MIN_ZOOM } from './editor/CanvasViewport'
 
@@ -132,6 +133,28 @@ export default function App({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [open],
   )
+
+  // The label in the address opens on arrival, so a reload or a switch from
+  // the phone view lands back in its editor.
+  const arrival = useRef(labelInAddress())
+  const arriving = useRef(false)
+  useEffect(() => {
+    const id = arrival.current
+    if (!id || arriving.current) return
+    arriving.current = true
+    void openDocument(id).finally(() => {
+      arrival.current = null
+    })
+  }, [openDocument])
+
+  // ...and the address follows the open label from then on.
+  const openId = detail?.id ?? null
+  useEffect(() => {
+    // Not while the label from the address is still on its way.
+    if (!openId && arrival.current) return
+    const path = editorPath(openId)
+    if (window.location.pathname + window.location.search !== path) window.history.replaceState(null, '', path)
+  }, [openId])
 
   const createDocument = useCallback(
     async (chosen: Template) => {

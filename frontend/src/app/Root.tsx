@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { preferences as preferencesApi } from '../api/preferences'
 import App from '../App'
 import { MobileApp } from '../mobile/MobileApp'
-import { MOBILE_BASE, isPhone, prefersDesktop } from '../mobile/view'
+import { MOBILE_BASE, isPhone, labelInAddress, mobilePath, prefersDesktop } from '../mobile/view'
 import { TranslationProvider } from '../i18n'
 import { DialogProvider } from '../ui/dialogs'
 import { setLocale } from './locale'
@@ -25,7 +25,7 @@ function wantsMobile(): boolean {
   const path = window.location.pathname
   if (path === MOBILE_BASE || path.startsWith(`${MOBILE_BASE}/`)) return true
   if (path === '/' && isPhone() && !prefersDesktop()) {
-    window.history.replaceState(null, '', MOBILE_BASE)
+    window.history.replaceState(null, '', mobilePath(labelInAddress()))
     return true
   }
   return false

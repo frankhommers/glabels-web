@@ -91,7 +91,7 @@ function ListScreen({ onOpen }: { onOpen: (id: string) => void }) {
     <>
       <header className="mobile-bar">
         <h1>{t('mobile.labels')}</h1>
-        <DesktopButton />
+        <DesktopButton onClick={() => openFullEditor()} />
       </header>
       <main className="mobile-body">
         {problem ? <p className="mobile-problem">{problem}</p> : null}
@@ -505,7 +505,12 @@ function LabelScreen({ id, onBack }: { id: string; onBack: () => void }) {
           ‹ {t('mobile.labels')}
         </button>
         <h1>{detail?.name ?? ''}</h1>
-        <DesktopButton />
+        <DesktopButton
+          onClick={async () => {
+            await flush()
+            openFullEditor(id)
+          }}
+        />
       </header>
 
       <main className="mobile-body">
@@ -728,10 +733,10 @@ function PrintStatus({ state }: { state: PrintState }) {
 }
 
 /** Back to the full editor; the device remembers that choice. */
-function DesktopButton() {
+function DesktopButton({ onClick }: { onClick: () => void }) {
   const t = useT()
   return (
-    <button type="button" className="mobile-link" onClick={openFullEditor}>
+    <button type="button" className="mobile-link" onClick={onClick}>
       {t('mobile.desktop')}
     </button>
   )
