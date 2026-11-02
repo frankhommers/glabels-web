@@ -194,17 +194,24 @@ class Renderer:
         page: int = 1,
         dpi: int = 96,
         crop: tuple[int, int, int, int] | None = None,
+        crisp: bool = False,
     ) -> Path:
         """Turn one page of the PDF into a PNG for display in the browser.
 
         We show the print itself, not a second rendering that might differ:
         this is the same PDF that goes to the printer.
+
+        `crisp` is for a printer that gets this picture rather than the PDF,
+        at its own resolution: no smoothed edges, which would only be cut
+        off to black or white, and no line thinner than one dot, which would
+        break up or vanish. What is still grey (a photo, a grey fill) is
+        grey in the picture; the printer's driver turns it into dots.
         """
         async with self._semaphore:
             with tempfile.TemporaryDirectory(prefix="glw-raster-") as tmp:
                 work = Path(tmp)
                 shutil.copyfile(pdf_path, work / "input.pdf")
-                args = self._rasterize_command(work, page=page, dpi=dpi, crop=crop)
+                args = self._rasterize_command(work, page=page, dpi=dpi, crop=crop, crisp=crisp)
                 log.info("rasterize: %s", " ".join(args))
                 try:
                     proc = await asyncio.create_subprocess_exec(
@@ -233,7 +240,13 @@ class Renderer:
                 return output_path
 
     def _rasterize_command(
-        self, work: Path, *, page: int, dpi: int, crop: tuple[int, int, int, int] | None = None
+        self,
+        work: Path,
+        *,
+        page: int,
+        dpi: int,
+        crop: tuple[int, int, int, int] | None = None,
+        crisp: bool = False,
     ) -> list[str]:
         options = [
             "-png",
@@ -242,6 +255,8 @@ class Renderer:
             "-l", str(page),
             "-singlefile",
         ]
+        if crisp:
+            options += ["-aa", "no", "-aaVector", "no", "-thinlinemode", "solid"]
         if crop is not None:
             # Only this part of the page, in pixels at this resolution: one
             # label out of a sheet.

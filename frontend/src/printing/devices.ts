@@ -26,7 +26,13 @@ export type DevicePrinter = {
   /** What it takes, when the driver's judgement should be overruled; as
    *  for a network printer. */
   takes?: PrinterTakes
+  /** How dark it prints, when set here; else the printer's own default.
+   *  Within the driver's `darkness` range. */
+  darkness?: number
 }
+
+/** The darkness settings a printer has: whole steps from `min` to `max`. */
+export type DarknessRange = { min: number; max: number; normal: number }
 
 /** A label to judge a printer by, like `PageQuestion` for the server. */
 export type DevicePage = { widthPt: number; heightPt: number; continuous: boolean }
@@ -61,6 +67,9 @@ export interface DeviceDriver {
   fit(printer: DevicePrinter, page: DevicePage): Fit
   /** Print. Called from a click, so the driver may ask for the device again. */
   print(printer: DevicePrinter, job: DeviceJob): Promise<void>
+  /** How dark this printer can print, when that can be set; `null` when it
+   *  cannot (or is not known yet). */
+  darkness?(printer: DevicePrinter): DarknessRange | null
 }
 
 /** What went wrong, for the interface to say in the user's language. The
@@ -160,11 +169,17 @@ export function freeName(wanted: string, taken: string[]): string {
   }
 }
 
-/** Load a picture of a page and put it on a canvas. */
+/** Load a picture of a page and put it on a canvas. The address asks for
+ *  a crisp picture: one without smoothed edges, made to be printed as it is. */
 export async function pageCanvas(url: string): Promise<HTMLCanvasElement> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
-  const bitmap = await createImageBitmap(await response.blob())
+  // The pixels as they are: no colour correction, which could turn white
+  // into almost white.
+  const bitmap = await createImageBitmap(await response.blob(), {
+    colorSpaceConversion: 'none',
+    premultiplyAlpha: 'none',
+  })
   const canvas = document.createElement('canvas')
   canvas.width = bitmap.width
   canvas.height = bitmap.height
@@ -174,5 +189,51 @@ export async function pageCanvas(url: string): Promise<HTMLCanvasElement> {
   context.fillRect(0, 0, canvas.width, canvas.height)
   context.drawImage(bitmap, 0, 0)
   bitmap.close()
+  return canvas
+}
+
+/** The page in black and white, for a printer that prints dots. What is
+ *  already black or white stays exactly so: text and lines come crisp from
+ *  the server. Only grey (a photo, a grey fill) becomes a pattern of dots,
+ *  with Atkinson's dithering: it spreads just part of the error, so light
+ *  areas stay clean and small details keep their contrast, which suits
+ *  small thermal labels better than Floyd-Steinberg. */
+export function blackAndWhite(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) throw new DeviceError('failed', 'no canvas')
+  const { width, height } = canvas
+  const image = context.getImageData(0, 0, width, height)
+  const data = image.data
+  const light = new Float32Array(width * height)
+  for (let index = 0; index < light.length; index += 1) {
+    const at = index * 4
+    // Transparent counts as white paper.
+    const alpha = data[at + 3] / 255
+    const value = 0.299 * data[at] + 0.587 * data[at + 1] + 0.114 * data[at + 2]
+    light[index] = value * alpha + 255 * (1 - alpha)
+  }
+  const spread = (x: number, y: number, error: number) => {
+    if (x >= 0 && x < width && y < height) light[y * width + x] += error
+  }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x
+      const old = light[index]
+      const value = old < 128 ? 0 : 255
+      const error = (old - value) / 8
+      if (error !== 0) {
+        spread(x + 1, y, error)
+        spread(x + 2, y, error)
+        spread(x - 1, y + 1, error)
+        spread(x, y + 1, error)
+        spread(x + 1, y + 1, error)
+        spread(x, y + 2, error)
+      }
+      const at = index * 4
+      data[at] = data[at + 1] = data[at + 2] = value
+      data[at + 3] = 255
+    }
+  }
+  context.putImageData(image, 0, 0)
   return canvas
 }

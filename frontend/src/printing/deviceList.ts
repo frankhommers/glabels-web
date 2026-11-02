@@ -68,7 +68,8 @@ export function withDevicePrinters(list: PrinterList, page: PageQuestion | null)
 }
 
 /** Print on a printer of this device. The pages are the preview pictures of
- *  exactly what a network printer would get, at the printer's resolution.
+ *  exactly what a network printer would get, at the printer's resolution,
+ *  made crisp: without the smoothed edges meant for a screen.
  *
  *  The server never sees such a print, so the outcome is told to it after:
  *  it lands in the job history, and a completed print marks its list rows
@@ -107,7 +108,7 @@ export async function printOnDevice(
     await driver.print(printer, {
       title: job.title,
       pages: job.pages,
-      page: (index) => pageCanvas(job.pageUrl(index + 1, printer.dpi)),
+      page: (index) => pageCanvas(`${job.pageUrl(index + 1, printer.dpi)}&crisp=true`),
       onProgress,
     })
   } catch (error) {

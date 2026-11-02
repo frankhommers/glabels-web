@@ -9,7 +9,7 @@ import {
   PageColorType,
   type PrintTaskName,
 } from '@mmote/niimbluelib'
-import { DeviceError, type DeviceJob, type DevicePrinter } from '../devices'
+import { blackAndWhite, DeviceError, type DeviceJob, type DevicePrinter } from '../devices'
 
 // One connection per page: within a visit, printing again needs no picker.
 let client: NiimbotBluetoothClient | null = null
@@ -61,6 +61,12 @@ async function connect(deviceId?: string): Promise<Connection> {
   return { client: fresh, device: picked }
 }
 
+/** The darkness steps the library knows for a model, by its name. */
+export function densityOf(model: string): { min: number; max: number; normal: number } | null {
+  const meta = modelsLibrary.find((item) => item.model === model)
+  return meta ? { min: meta.densityMin, max: meta.densityMax, normal: meta.densityDefault } : null
+}
+
 export async function discover(): Promise<Omit<DevicePrinter, 'id'>> {
   device = null
   const { client: connected, device: found } = await connect()
@@ -74,14 +80,13 @@ export async function discover(): Promise<Omit<DevicePrinter, 'id'>> {
     details: {
       deviceId: found.id,
       headPixels: meta.printheadPixels,
-      density: meta.densityDefault,
       printTask: connected.getPrintTaskType() ?? '',
     },
   }
 }
 
 /** The page as the head prints it: as wide as the head, centred on the
- *  label (a label is often a little wider), and only black and white. */
+ *  label (a label is often a little wider), and in black and white. */
 function forHead(page: HTMLCanvasElement, headPixels: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = headPixels
@@ -91,16 +96,7 @@ function forHead(page: HTMLCanvasElement, headPixels: number): HTMLCanvasElement
   context.fillStyle = '#ffffff'
   context.fillRect(0, 0, canvas.width, canvas.height)
   context.drawImage(page, Math.round((headPixels - page.width) / 2), 0)
-  const image = context.getImageData(0, 0, canvas.width, canvas.height)
-  const data = image.data
-  for (let index = 0; index < data.length; index += 4) {
-    const light = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2]
-    const value = light < 128 ? 0 : 255
-    data[index] = data[index + 1] = data[index + 2] = value
-    data[index + 3] = 255
-  }
-  context.putImageData(image, 0, 0)
-  return canvas
+  return blackAndWhite(canvas)
 }
 
 export async function print(printer: DevicePrinter, job: DeviceJob): Promise<void> {
@@ -109,6 +105,10 @@ export async function print(printer: DevicePrinter, job: DeviceJob): Promise<voi
   const taskName = (connected.getPrintTaskType() ?? printer.details.printTask) as PrintTaskName | ''
   const headPixels = meta?.printheadPixels ?? Number(printer.details.headPixels)
   if (!taskName || !headPixels) throw new DeviceError('failed', 'unknown print method for this model')
+  // How dark: as set for this printer, else the model's own default.
+  const steps = (meta && densityOf(meta.model)) || densityOf(printer.model) || { min: 1, max: 1, normal: 1 }
+  const wanted = printer.darkness ?? steps.normal
+  const density = Math.min(steps.max, Math.max(steps.min, Math.round(wanted)))
 
   // Make every page before printing, so a slow page never stalls the printer.
   const pages: HTMLCanvasElement[] = []
@@ -117,7 +117,7 @@ export async function print(printer: DevicePrinter, job: DeviceJob): Promise<voi
   connected.stopHeartbeat()
   const task = connected.protocol.newPrintTask(taskName, {
     totalPages: pages.length,
-    density: Number(printer.details.density) || meta?.densityDefault || 2,
+    density,
     labelType: LabelType.WithGaps,
     pageColor: PageColorType.SingleColor,
     statusPollIntervalMs: 100,

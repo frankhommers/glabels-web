@@ -717,18 +717,23 @@ async def preview_png(
     collate: bool = False,
     group_per_page: bool = False,
     pending_only: bool = False,
+    crisp: bool = False,
     app: AppState = Depends(state),
 ) -> FileResponse:
-    """Page preview: a rasterisation of exactly the PDF that gets printed."""
+    """Page preview: a rasterisation of exactly the PDF that gets printed.
+
+    `crisp`: made for a printer that prints this picture itself, without
+    smoothed edges (see `Renderer.rasterize`).
+    """
     settings = _settings_from_query(
         sheets, copies, first, outlines, crop_marks, reverse, collate, group_per_page, pending_only
     )
     info, pdf = await _ensure_pdf(app, doc_id, settings)
 
-    image = pdf.with_name(f"{pdf.stem}-p{page:03d}-{dpi}.png")
+    image = pdf.with_name(f"{pdf.stem}-p{page:03d}-{dpi}{'-crisp' if crisp else ''}.png")
     if not image.exists():
         try:
-            await app.renderer.rasterize(pdf, image, page=page, dpi=dpi)
+            await app.renderer.rasterize(pdf, image, page=page, dpi=dpi, crisp=crisp)
         except RenderError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 

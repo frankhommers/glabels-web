@@ -7,7 +7,7 @@
  *  `../plugins.ts`, and NIIMBOT support is gone.
  */
 
-import { registerDriver, type DevicePage, type DevicePrinter, type Fit } from '../devices'
+import { registerDriver, type DarknessRange, type DevicePage, type DevicePrinter, type Fit } from '../devices'
 
 const POINTS_PER_MM = 72 / 25.4
 // A label may be this much wider than the print head: the head prints its
@@ -16,7 +16,13 @@ const WIDER_THAN_HEAD_MM = 4
 // The longest label we send; NIIMBOT's own catalogue stops well before this.
 const MAX_LENGTH_MM = 250
 
-const load = () => import('./driver')
+// The driver's code, once loaded: it knows every model's darkness steps.
+let loaded: typeof import('./driver') | null = null
+const load = () =>
+  import('./driver').then((module) => {
+    loaded = module
+    return module
+  })
 
 /** Does a label fit, judged by the print head: across the roll it may be
  *  somewhat wider than the head, along the roll it has a limit. */
@@ -29,6 +35,14 @@ export function fit(printer: DevicePrinter, page: DevicePage): Fit {
   return page.continuous ? 'maybe' : 'yes'
 }
 
+/** The darkness steps of this model, as the library knows them; NIIMBOT
+ *  calls it density. Nothing until the driver's code is loaded, which
+ *  happens as soon as the printers are listed. */
+export function darkness(printer: DevicePrinter): DarknessRange | null {
+  const steps = loaded?.densityOf(printer.model)
+  return steps && steps.max > steps.min ? steps : null
+}
+
 registerDriver({
   id: 'niimbot',
   connection: 'Bluetooth',
@@ -38,4 +52,5 @@ registerDriver({
   discover: async () => (await load()).discover(),
   fit,
   print: async (printer, job) => (await load()).print(printer, job),
+  darkness,
 })

@@ -60,6 +60,19 @@ says which label sizes fit it, and prints the pages it gets as pictures.
 Removing the line and the folder removes that kind of printer; the printers
 added for it stay in the browser and return with the driver.
 
+The pictures are made for printing, not for a screen: `preview.png` with
+`crisp=true` rasterises the print PDF without smoothed edges (`pdftoppm -aa
+no -aaVector no`), and makes no line thinner than one dot (`-thinlinemode
+solid`), so thin lines do not break up or vanish. Text and lines are then
+already black and white; for a printer that prints dots, `blackAndWhite` in
+`devices.ts` turns only what is still grey (a photo, a grey fill) into dots,
+with Atkinson dithering. A network printer gets the PDF itself and rasterises
+it at its own resolution; none of this applies there.
+
+A driver may offer a darkness setting (`darkness` in the driver); the
+printers dialog then shows a **Darkness** choice for that printer, with the
+printer's own default as "normal".
+
 ### NIIMBOT
 
 `frontend/src/printing/niimbot/` drives NIIMBOT label printers (D11, D110,
@@ -74,8 +87,8 @@ when a NIIMBOT printer is added or used.
 - The page is printed upright: its top comes out first. The NIIMBOT label
   rolls among the products have their tail at the bottom, so it comes out
   last. Designed lying down, the tail is on the left.
-- Grey becomes black or white at half; the print density is the model's
-  default.
+- Darkness is NIIMBOT's print density, in the steps of the model
+  (1 to 3 on a D110, up to 5, 15 or 20 on others); "normal" is the model's default.
 
 ## What happens under the hood
 

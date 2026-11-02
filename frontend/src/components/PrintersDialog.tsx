@@ -239,6 +239,12 @@ export function PrintersDialog({
     }
   }
 
+  const changeDarkness = (printer: Printer, darkness: number | undefined) => {
+    if (!printer.device) return
+    updateDevicePrinter(printer.device.id, { darkness })
+    devicesChanged()
+  }
+
   const networkUnavailable = list ? !list.available : true
   const canAdd = !networkUnavailable || drivers.length > 0
 
@@ -332,6 +338,7 @@ export function PrintersDialog({
                           </option>
                         ))}
                       </select>
+                      <DarknessChoice printer={printer} disabled={busy} onChange={changeDarkness} />
                     </td>
                     <td>
                       {printer.is_default ? (
@@ -560,5 +567,41 @@ export function PrintersDialog({
         </div>
       </div>
     </div>
+  )
+}
+
+/** How dark a printer of this device prints, for one whose driver lets
+ *  that be set. Nothing for other printers. */
+function DarknessChoice({
+  printer,
+  disabled,
+  onChange,
+}: {
+  printer: Printer
+  disabled: boolean
+  onChange: (printer: Printer, darkness: number | undefined) => void
+}) {
+  const t = useT()
+  const device = printer.device
+  const range = device ? driverOf(device)?.darkness?.(device) : null
+  if (!device || !range) return null
+  const steps = Array.from({ length: range.max - range.min + 1 }, (_, index) => range.min + index)
+  return (
+    <label className="printer-darkness" onClick={(event) => event.stopPropagation()}>
+      <small className="muted">{t('printers.darkness')}</small>
+      <select
+        value={device.darkness ?? ''}
+        disabled={disabled}
+        title={t('printers.darknessHint')}
+        onChange={(event) => onChange(printer, event.target.value ? Number(event.target.value) : undefined)}
+      >
+        <option value="">{t('printers.darknessNormal', { value: range.normal })}</option>
+        {steps.map((step) => (
+          <option key={step} value={step}>
+            {step}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }

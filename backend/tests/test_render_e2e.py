@@ -81,6 +81,37 @@ def test_new_document_gives_a_valid_pdf(client):
     assert pdf.content.startswith(b"%PDF-")
 
 
+def test_a_crisp_preview_has_no_smoothed_edges(client):
+    """For a printer that prints the picture itself: black and white only,
+    where the screen gets grey edges."""
+    image_module = pytest.importorskip("PIL.Image")
+    import io
+
+    doc = client.post("/api/documents", json={"name": "Crisp", "brand": "Avery", "part": "5095"}).json()
+    doc["content"]["objects"] = [
+        {
+            "type": "text",
+            "x_pt": 18,
+            "y_pt": 30,
+            "w_pt": 200,
+            "h_pt": 40,
+            "lines": ["Crisp edges"],
+            "font_family": "Liberation Sans",
+            "font_size": 9,
+        }
+    ]
+    client.put(f"/api/documents/{doc['id']}", json={"content": doc["content"]})
+
+    def shades(crisp: bool) -> set[int]:
+        params = {"copies": 1, "dpi": 203, "crisp": crisp}
+        response = client.get(f"/api/documents/{doc['id']}/preview.png", params=params)
+        assert response.status_code == 200, response.text
+        return set(image_module.open(io.BytesIO(response.content)).convert("L").getdata())
+
+    assert len(shades(False)) > 2
+    assert shades(True) == {0, 255}
+
+
 def test_broken_document_reports_an_error_instead_of_an_empty_pdf(client, tmp_path):
     doc = client.post("/api/documents", json={"brand": "Avery", "part": "5095"}).json()
 
